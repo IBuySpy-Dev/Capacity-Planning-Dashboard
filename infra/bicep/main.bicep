@@ -389,6 +389,10 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
           value: adminGroupId
         }
         {
+          name: 'REACT_PROTOTYPE_ENABLED'
+          value: 'true'
+        }
+        {
           name: 'SESSION_STORE_SQL_ENABLED'
           value: authEnabled ? 'true' : 'false'
         }

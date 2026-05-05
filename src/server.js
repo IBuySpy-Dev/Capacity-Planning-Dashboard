@@ -1483,6 +1483,12 @@ app.use('/api', (req, res, next) => {
 });
 
 function isReactPrototypeHostAllowed(hostname = '') {
+  // Allow React prototype if explicitly enabled via environment variable
+  if (process.env.REACT_PROTOTYPE_ENABLED === 'true') {
+    return true;
+  }
+  
+  // Or allow based on hostname patterns (dev/test environments)
   const value = String(hostname || '').toLowerCase();
   return value.includes('localhost')
     || value.includes('127.0.0.1')
