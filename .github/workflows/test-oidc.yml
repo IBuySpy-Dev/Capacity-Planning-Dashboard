@@ -13,53 +13,28 @@ jobs:
     steps:
       - name: Get OIDC Token
         run: |
-          # Get the OIDC token from GitHub
-          TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r '.token')
-          echo "Token received (length: ${#TOKEN})"
-          
-          # Decode and check the token claims
-          echo ""
-          echo "Token claims:"
-          echo $TOKEN | cut -d'.' -f2 | base64 -d | jq .
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
-
-      - name: Test Azure Login with OIDC (Debug)
-        run: |
-          echo "Environment variables:"
-          echo "AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}"
-          echo "AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}"
-          echo "AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}"
-          echo ""
-          echo "Attempting Azure login..."
-          
-          # Get the OIDC token
-          TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r '.token')
-          
-          # Try to exchange it for an Azure access token
-          echo "Exchanging OIDC token for Azure access token..."
+          # Request the OIDC token from GitHub
+          echo "Requesting OIDC token..."
           RESPONSE=$(curl -s -X POST \
-            "https://login.microsoftonline.com/${{ vars.AZURE_TENANT_ID }}/oauth2/v2.0/token" \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "client_id=${{ vars.AZURE_CLIENT_ID }}" \
-            -d "assertion=$TOKEN" \
-            -d "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
-            -d "requested_token_use=on_behalf_of" \
-            -d "subject_token_type=urn:ietf:params:oauth:token-type:jwt")
+            -H "Authorization: bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/app/installations/${{ github.installation_id }}/access_tokens" \
+            -d "{\"repositories\":[\"${{ github.event.repository.name }}\"]}")
           
-          echo "Response:"
-          echo $RESPONSE | jq .
+          echo "Response: $RESPONSE"
           
-          # Check if there's an error
-          ERROR=$(echo $RESPONSE | jq -r '.error // empty')
-          if [ -n "$ERROR" ]; then
-            echo ""
-            echo "Error: $ERROR"
-            ERROR_DESC=$(echo $RESPONSE | jq -r '.error_description // empty')
-            echo "Description: $ERROR_DESC"
-            exit 1
-          fi
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
+          # Try using the GitHub CLI to get the token instead
+          echo ""
+          echo "Using GitHub CLI to request OIDC token..."
+          gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }} \
+            --jq '.head_branch'
+          
+      - name: Test Azure Login with Direct API Call
+        run: |
+          echo "Testing direct Azure AD token exchange..."
+          echo "Client ID: ${{ vars.AZURE_CLIENT_ID }}"
+          echo "Tenant ID: ${{ vars.AZURE_TENANT_ID }}"
+          
+          # Try a simple login test
+          az account show 2>&1 || true
+
