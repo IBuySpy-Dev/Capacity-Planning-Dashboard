@@ -245,6 +245,148 @@ Examples:
 
 Use zip/web package deploy for the dashboard App Service.
 
+## Automated deployment with GitHub Actions
+
+The repository includes fully automated deployment workflows that use **GitHub Workload Identity Federation (OIDC)** to eliminate the need for stored credentials.
+
+### Prerequisites
+
+- Azure subscription with available capacity (check quotas before deployment)
+- GitHub repository with Actions enabled
+- Azure CLI and GitHub CLI installed locally
+- Both authenticated: `az login` and `gh auth login`
+
+### One-Command Setup
+
+**Step 1: Bootstrap GitHub OIDC**
+
+Run the bootstrap script to create Azure service principal and configure GitHub environment:
+
+```powershell
+.\scripts\bootstrap-github-oidc.ps1 `
+  -SubscriptionId "844eabcc-dc96-453b-8d45-bef3d566f3f8" `
+  -ResourceGroupName "rg-capdash-prod" `
+  -GitHubOrganization "IBuySpy-Dev" `
+  -GitHubRepository "Capacity-Planning-Dashboard"
+```
+
+This script:
+- ✅ Validates Azure CLI and GitHub CLI prerequisites
+- ✅ Creates service principal for GitHub OIDC
+- ✅ Configures federated credentials (main branch + PR deployments)
+- ✅ Sets GitHub environment variables automatically
+- ✅ Outputs workflow configuration examples
+- ✅ Provides verification commands
+
+**Execution time:** 3 minutes
+
+**Step 2: Update Workflows (if needed)**
+
+Copy the YAML configuration from the script output and update `.github/workflows/bootstrap-and-deploy.yml` to use the environment and variables.
+
+**Step 3: Trigger Deployment**
+
+```bash
+# Via GitHub CLI
+gh workflow run bootstrap-and-deploy.yml --repo IBuySpy-Dev/Capacity-Planning-Dashboard
+
+# Or via GitHub Web UI
+# 1. Go to Actions tab
+# 2. Select "Bootstrap and Deploy" workflow
+# 3. Click "Run workflow"
+```
+
+**Execution time:** 10-15 minutes (includes build, deploy, SQL bootstrap, app restart)
+
+### What Happens During Deployment
+
+1. **Setup Phase**
+   - Validates GitHub Actions secrets configuration
+   - Auto-configures missing secrets (one-time)
+   - Uses GitHub OIDC for Azure authentication (no stored credentials)
+
+2. **Build Phase**
+   - Installs npm dependencies
+   - Creates deployment package (27 MB with node_modules)
+
+3. **Deploy Phase**
+   - Deploys to Azure App Service
+   - Authenticates using GitHub OIDC token
+   - Executes SQL managed identity bootstrap script
+   - Restarts app and verifies deployment
+
+4. **Bootstrap Phase**
+   - Creates managed identity database user
+   - Grants required roles (db_datareader, db_datawriter)
+   - Enables Entra authentication for app access
+
+### Verification
+
+Monitor deployment in GitHub Actions:
+
+```bash
+# Watch workflow execution
+gh run list --workflow bootstrap-and-deploy.yml --limit 1
+
+# View detailed logs
+gh run view <run-id> --log
+```
+
+Check application logs:
+
+```bash
+# Stream logs from Azure App Service
+az webapp log tail \
+  --resource-group rg-capdash-prod \
+  --name app-capdash-prod-prod01
+```
+
+Look for:
+- `✓ SQL script executed successfully`
+- `✓ Managed identity database user configured`
+- No "Login failed for user" errors
+
+Test API endpoints:
+
+```bash
+curl -H "Authorization: Bearer <token>" \
+  https://app-capdash-prod-prod01.azurewebsites.net/api/subscriptions
+# Expected: HTTP 200 with JSON data
+```
+
+### Security Benefits of GitHub OIDC
+
+| Aspect | Service Principal | GitHub OIDC |
+|--------|-------------------|------------|
+| **Credential Storage** | JSON secret in GitHub | Variables (non-secret) |
+| **Token Lifetime** | Indefinite | 1 hour |
+| **Rotation** | Manual | Automatic per run |
+| **Security Model** | Legacy | Modern (CIEM recommended) |
+
+### Troubleshooting Deployment
+
+**Workflow fails at Azure Login:**
+- Verify `bootstrap-github-oidc.ps1` was run successfully
+- Check GitHub environment variables: `gh variable list --env production`
+- Re-run bootstrap script if needed
+
+**App starts but APIs return 500 errors:**
+- Check Application Insights logs for "Login failed for user"
+- Verify SQL bootstrap completed: Look for logs in GitHub Actions
+- Manually run SQL bootstrap: `.\scripts\bootstrap-sql-managed-identity.ps1`
+
+**GitHub Actions secret configuration fails:**
+- Ensure `gh auth login` was successful
+- Verify repository access permissions
+- Check GitHub Actions permissions in repository settings
+
+### Documentation
+
+For more details, see:
+- `docs/GITHUB-OIDC-QUICK-START.md` - Quick reference (5 min read)
+- `docs/GITHUB-OIDC-SETUP.md` - Complete guide (15 min read)
+- `docs/AUTOMATED-DEPLOYMENT.md` - Deployment architecture (10 min read)
+
 ## Legacy database patch package
 
 Use these files when an existing environment is missing the current AI/PaaS tables, views, or dashboard settings.
