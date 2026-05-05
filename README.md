@@ -256,11 +256,41 @@ The repository includes fully automated deployment workflows that use **GitHub W
 - Azure CLI and GitHub CLI installed locally
 - Both authenticated: `az login` and `gh auth login`
 
-### One-Command Setup
+### Complete Bootstrap & Deployment Workflow
+
+**Recommended: Use the orchestration script that handles everything:**
+
+```powershell
+.\scripts\bootstrap-and-deploy.ps1 `
+  -GitHubOrganization "IBuySpy-Dev" `
+  -GitHubRepository "Capacity-Planning-Dashboard"
+```
+
+This script will:
+1. **OIDC Bootstrap** - Set up GitHub OIDC federation (if needed)
+2. **CA Policy Check** - Diagnose and fix Conditional Access issues (if needed)
+3. **Deploy** - Trigger the production deployment workflow
+
+**Options:**
+```powershell
+# Skip OIDC bootstrap if already done
+.\scripts\bootstrap-and-deploy.ps1 -SkipOIDC
+
+# Skip CA policy configuration if already fixed
+.\scripts\bootstrap-and-deploy.ps1 -SkipCAPolicy
+
+# Automatically trigger and wait for deployment
+.\scripts\bootstrap-and-deploy.ps1 -TriggerDeployment -WaitForDeployment
+
+# Complete workflow with all automation
+.\scripts\bootstrap-and-deploy.ps1 -SkipOIDC -SkipCAPolicy -TriggerDeployment -WaitForDeployment
+```
+
+### Alternative: Manual Step-by-Step
 
 **Step 1: Bootstrap GitHub OIDC**
 
-Run the bootstrap script to create Azure service principal and configure GitHub environment:
+Run the OIDC bootstrap script to create Azure service principal and configure GitHub:
 
 ```powershell
 .\scripts\bootstrap-github-oidc.ps1 `
@@ -277,6 +307,98 @@ This script:
 - ✅ Sets GitHub environment variables automatically
 - ✅ Outputs workflow configuration examples
 - ✅ Provides verification commands
+
+**Step 2: Handle Conditional Access Policy (if needed)**
+
+If deployment workflow fails with `AADSTS53003` error:
+
+```powershell
+# Check current CA policy status
+.\scripts\bootstrap-ca-policy.ps1 -Mode check
+
+# Get exemption steps
+.\scripts\bootstrap-ca-policy.ps1 -Mode exempt
+
+# Create new CA policy exception
+.\scripts\bootstrap-ca-policy.ps1 -Mode create-exception
+```
+
+This is typically a one-time Azure AD administrator action required to exempt the service principal from Conditional Access policies.
+
+**Step 3: Deploy to Production**
+
+Manually trigger the deployment workflow:
+
+```powershell
+gh workflow run deploy.yml --repo IBuySpy-Dev/Capacity-Planning-Dashboard -f environment=prod
+```
+
+Or use GitHub Actions UI to manually dispatch the workflow.
+
+### Deployment Phases
+
+The `deploy.yml` workflow executes in sequence:
+
+1. **Build & Test** - npm install, npm test
+2. **Azure Login** - Authenticate using GitHub OIDC token
+3. **Build Package** - Create deployment zip with all files
+4. **Deploy to App Service** - Push code to Azure Web App
+5. **SQL Bootstrap** - Create managed identity database user
+6. **Restart App** - Recycle app pool to load new permissions
+7. **Verify** - Confirm deployment succeeded
+
+### Verification
+
+After deployment, verify the application is working:
+
+```bash
+# Check app is running
+curl https://app-capdash-prod-prod01.azurewebsites.net
+
+# Test API with authentication
+curl -H "Authorization: Bearer <token>" \
+  https://app-capdash-prod-prod01.azurewebsites.net/api/subscriptions
+
+# Check Application Insights logs
+az monitor app-insights query \
+  --app capdash-prod-prod01 \
+  --analytics-query "customMetrics | limit 10"
+```
+
+### Troubleshooting
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `AADSTS53003` | Conditional Access policy blocks token | Run `bootstrap-ca-policy.ps1` to fix |
+| `Login failed` | SQL managed identity not configured | Verify SQL bootstrap step completes |
+| `npm ci fails` | Package-lock.json out of sync | Re-run `npm install` and commit new lock file |
+| `App returns 500` | Deployment package missing files | Check `AZURE_ERRORS` in Application Insights |
+
+### Security Model
+
+**GitHub OIDC Approach:**
+- ✅ Zero credentials stored in GitHub
+- ✅ Automatic token rotation (1-hour TTL per deployment)
+- ✅ GitHub validates repository context and branch
+- ✅ Azure validates GitHub OIDC issuer and subject
+- ✅ CIEM-recommended approach for supply chain security
+
+**Comparison with alternatives:**
+
+| Approach | Setup | Rotation | Storage | Security |
+|----------|-------|----------|---------|----------|
+| **GitHub OIDC** | 1-time bootstrap | Automatic | None | ⭐⭐⭐⭐⭐ |
+| Managed Identity | 1-time setup | N/A | N/A | ⭐⭐⭐⭐ |
+| SPN with Secret | Manual | Manual | GitHub Secrets | ⭐⭐⭐ |
+
+### Documentation
+
+- **[GITHUB-OIDC-SETUP.md](./docs/GITHUB-OIDC-SETUP.md)** - Architecture guide, how OIDC works, migration guide
+- **[GITHUB-OIDC-QUICK-START.md](./docs/GITHUB-OIDC-QUICK-START.md)** - Quick reference for common tasks
+- **Bootstrap scripts:**
+  - `scripts/bootstrap-github-oidc.ps1` - Initial OIDC setup
+  - `scripts/bootstrap-ca-policy.ps1` - CA policy configuration
+  - `scripts/bootstrap-and-deploy.ps1` - Complete orchestration
 
 **Execution time:** 3 minutes
 
