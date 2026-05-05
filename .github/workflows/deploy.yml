@@ -62,6 +62,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install production dependencies
+        run: npm ci --production
+
       - name: Create deployment package
         run: |
           mkdir -p deployment
@@ -72,8 +75,12 @@ jobs:
           cp index.html deployment/
           cp styles.css deployment/
           cp web.config deployment/ 2>/dev/null || true
+          cp -r node_modules deployment/ 2>/dev/null || true
           cp -r react deployment/ 2>/dev/null || true
           cp -r src deployment/ 2>/dev/null || true
+          cp -r sql deployment/ 2>/dev/null || true
+          cp -r docs deployment/ 2>/dev/null || true
+          cp -r infra deployment/ 2>/dev/null || true
           cp -r tools deployment/ 2>/dev/null || true
           cd deployment
           zip -r ../deployment.zip .
@@ -112,6 +119,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install production dependencies
+        run: npm ci --production
+
       - name: Run tests
         run: npm test
 
@@ -125,8 +135,12 @@ jobs:
           cp index.html deployment/
           cp styles.css deployment/
           cp web.config deployment/ 2>/dev/null || true
+          cp -r node_modules deployment/ 2>/dev/null || true
           cp -r react deployment/ 2>/dev/null || true
           cp -r src deployment/ 2>/dev/null || true
+          cp -r sql deployment/ 2>/dev/null || true
+          cp -r docs deployment/ 2>/dev/null || true
+          cp -r infra deployment/ 2>/dev/null || true
           cp -r tools deployment/ 2>/dev/null || true
           cd deployment
           zip -r ../deployment.zip .
