@@ -102,9 +102,10 @@ jobs:
       - name: Install sqlcmd
         run: |
           # Install go-sqlcmd (supports ActiveDirectoryDefault auth for CI/CD)
-          LATEST_URL=$(curl -sSL https://api.github.com/repos/microsoft/go-sqlcmd/releases/latest \
-            | python3 -c "import sys,json;r=json.load(sys.stdin);print(next(a['browser_download_url'] for a in r['assets'] if 'linux_amd64' in a['name'] and a['name'].endswith('.tar.bz2')))")
-          curl -sSL "$LATEST_URL" | sudo tar -xj -C /usr/local/bin sqlcmd
+          VERSION=$(curl -sSL https://api.github.com/repos/microsoft/go-sqlcmd/releases/latest \
+            | python3 -c "import sys,json;print(json.load(sys.stdin)['tag_name'])")
+          curl -sSL "https://github.com/microsoft/go-sqlcmd/releases/download/${VERSION}/sqlcmd-linux-amd64.tar.bz2" \
+            | sudo tar -xj -C /usr/local/bin sqlcmd
           sqlcmd --version
 
       - name: Bootstrap SQL Database for Managed Identity
@@ -252,9 +253,10 @@ jobs:
       - name: Install sqlcmd
         run: |
           # Install go-sqlcmd (supports ActiveDirectoryDefault auth for CI/CD)
-          LATEST_URL=$(curl -sSL https://api.github.com/repos/microsoft/go-sqlcmd/releases/latest \
-            | python3 -c "import sys,json;r=json.load(sys.stdin);print(next(a['browser_download_url'] for a in r['assets'] if 'linux_amd64' in a['name'] and a['name'].endswith('.tar.bz2')))")
-          curl -sSL "$LATEST_URL" | sudo tar -xj -C /usr/local/bin sqlcmd
+          VERSION=$(curl -sSL https://api.github.com/repos/microsoft/go-sqlcmd/releases/latest \
+            | python3 -c "import sys,json;print(json.load(sys.stdin)['tag_name'])")
+          curl -sSL "https://github.com/microsoft/go-sqlcmd/releases/download/${VERSION}/sqlcmd-linux-amd64.tar.bz2" \
+            | sudo tar -xj -C /usr/local/bin sqlcmd
           sqlcmd --version
 
       - name: Bootstrap SQL Database for Managed Identity
