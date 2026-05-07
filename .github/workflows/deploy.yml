@@ -97,8 +97,15 @@ jobs:
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: deployment.zip
-          resource-group: ${{ env.AZURE_RESOURCE_GROUP }}
-          slot-name: 'production'
+          resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
+
+      - name: Install sqlcmd
+        run: |
+          curl -sSL https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+          curl -sSL "https://packages.microsoft.com/config/ubuntu/22.04/prod.list" | sudo tee /etc/apt/sources.list.d/msprod.list
+          sudo apt-get update -qq
+          ACCEPT_EULA=Y sudo apt-get install -y -qq mssql-tools18
+          echo "/opt/mssql-tools18/bin" >> $GITHUB_PATH
 
       - name: Bootstrap SQL Database for Managed Identity
         shell: pwsh
@@ -240,8 +247,15 @@ jobs:
         with:
           app-name: 'app-capdash-prod-prod01'
           package: deployment.zip
-          resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
-          slot-name: 'production'
+          resource-group-name: ${{ vars.AZURE_RESOURCE_GROUP }}
+
+      - name: Install sqlcmd
+        run: |
+          curl -sSL https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+          curl -sSL "https://packages.microsoft.com/config/ubuntu/22.04/prod.list" | sudo tee /etc/apt/sources.list.d/msprod.list
+          sudo apt-get update -qq
+          ACCEPT_EULA=Y sudo apt-get install -y -qq mssql-tools18
+          echo "/opt/mssql-tools18/bin" >> $GITHUB_PATH
 
       - name: Bootstrap SQL Database for Managed Identity
         shell: pwsh
