@@ -202,11 +202,10 @@ jobs:
             try {
               $response = Invoke-WebRequest -Uri $appUrl -UseBasicParsing -ErrorAction Stop
               if ($response.StatusCode -eq 200) {
-                Write-Host "✓ App is responsive (HTTP $($response.StatusCode))" -ForegroundColor Green
+                Write-Host "App is responsive (HTTP $($response.StatusCode))" -ForegroundColor Green
                 exit 0
               }
-            }
-            catch {
+            } catch {
               $attempt++
               if ($attempt -lt $maxAttempts) {
                 Write-Host "Attempt $attempt/$maxAttempts: App not ready yet, retrying in 2 seconds..."
@@ -388,11 +387,10 @@ jobs:
             try {
               $response = Invoke-WebRequest -Uri $appUrl -UseBasicParsing -ErrorAction Stop
               if ($response.StatusCode -eq 200) {
-                Write-Host "✓ App is responsive (HTTP $($response.StatusCode))" -ForegroundColor Green
+                Write-Host "App is responsive (HTTP $($response.StatusCode))" -ForegroundColor Green
                 exit 0
               }
-            }
-            catch {
+            } catch {
               $attempt++
               if ($attempt -lt $maxAttempts) {
                 Write-Host "Attempt $attempt/$maxAttempts: App not ready yet, retrying in 2 seconds..."
