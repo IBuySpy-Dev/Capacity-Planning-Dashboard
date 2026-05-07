@@ -161,8 +161,10 @@ var effectiveSqlServerResourceGroupName = empty(existingSqlServerResourceGroupNa
 var effectiveSqlServerName = useExistingSqlServer ? existingSqlServerName : sqlServerName
 var effectiveSqlDatabaseName = useExistingSqlDatabase ? existingSqlDatabaseName : sqlDatabaseName
 var effectiveSqlServerFqdn = contains(effectiveSqlServerName, '.') ? effectiveSqlServerName : '${effectiveSqlServerName}${az.environment().suffixes.sqlServerHostname}'
+var effectiveSqlServerId = resourceId(effectiveSqlServerResourceGroupName, 'Microsoft.Sql/servers', effectiveSqlServerName)
 var effectiveKeyVaultResourceGroupName = empty(existingKeyVaultResourceGroupName) ? resourceGroup().name : existingKeyVaultResourceGroupName
 var effectiveKeyVaultName = useExistingKeyVault ? existingKeyVaultName : keyVaultName
+var effectiveKeyVaultId = resourceId(effectiveKeyVaultResourceGroupName, 'Microsoft.KeyVault/vaults', effectiveKeyVaultName)
 var effectiveKeyVaultUri = 'https://${effectiveKeyVaultName}.${keyVaultDnsSuffix}/'
 var effectiveWorkerStorageAccountResourceGroupName = empty(existingWorkerStorageAccountResourceGroupName) ? resourceGroup().name : existingWorkerStorageAccountResourceGroupName
 var effectiveWorkerStorageAccountName = useExistingWorkerStorageAccount ? existingWorkerStorageAccountName : functionStorageName
@@ -807,6 +809,37 @@ module webManagementGroupQuotaWriterAssignments './modules/web-management-group-
     principalId: webApp.identity.principalId
   }
 }]
+
+// Service Connectors — formalise App Service -> SQL and App Service -> Key Vault bindings via managed identity
+resource sqlServiceConnector 'Microsoft.ServiceLinker/linkers@2022-11-01-preview' = {
+  name: 'sql_capdash'
+  scope: webApp
+  properties: {
+    targetService: {
+      type: 'AzureResource'
+      id: '${effectiveSqlServerId}/databases/${effectiveSqlDatabaseName}'
+    }
+    authInfo: {
+      authType: 'systemAssignedIdentity'
+    }
+    clientType: 'nodejs'
+  }
+}
+
+resource kvServiceConnector 'Microsoft.ServiceLinker/linkers@2022-11-01-preview' = {
+  name: 'kv_capdash'
+  scope: webApp
+  properties: {
+    targetService: {
+      type: 'AzureResource'
+      id: effectiveKeyVaultId
+    }
+    authInfo: {
+      authType: 'systemAssignedIdentity'
+    }
+    clientType: 'nodejs'
+  }
+}
 
 output webAppName string = webApp.name
 output webAppUrl string = 'https://${webApp.properties.defaultHostName}'
