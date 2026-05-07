@@ -208,7 +208,7 @@ jobs:
             } catch {
               $attempt++
               if ($attempt -lt $maxAttempts) {
-                Write-Host "Attempt $attempt/$maxAttempts: App not ready yet, retrying in 2 seconds..."
+                Write-Host "Attempt $attempt/$($maxAttempts): App not ready yet, retrying in 2 seconds..."
                 Start-Sleep -Seconds 2
               }
             }
@@ -393,7 +393,7 @@ jobs:
             } catch {
               $attempt++
               if ($attempt -lt $maxAttempts) {
-                Write-Host "Attempt $attempt/$maxAttempts: App not ready yet, retrying in 2 seconds..."
+                Write-Host "Attempt $attempt/$($maxAttempts): App not ready yet, retrying in 2 seconds..."
                 Start-Sleep -Seconds 2
               }
             }
