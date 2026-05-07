@@ -86,27 +86,37 @@ Write-Host "Setting subscription context..." -ForegroundColor Cyan
 az account set --subscription $SubscriptionId
 Write-Host "✓ Subscription set to $SubscriptionId" -ForegroundColor Green
 
+# Helper: invoke az rest and safely parse JSON; returns $null on any failure
+function Invoke-AzRestJson {
+    param([string]$Method, [string]$Url, [string]$Body, [hashtable]$Headers)
+    $extraArgs = @()
+    if ($Body)    { $extraArgs += "--body", $Body }
+    if ($Headers) { $Headers.GetEnumerator() | ForEach-Object { $extraArgs += "--headers", "$($_.Key)=$($_.Value)" } }
+    $raw = az rest --method $Method --url $Url @extraArgs 2>&1
+    if ($LASTEXITCODE -ne 0) { return $null }
+    try { return ($raw | ConvertFrom-Json) } catch { return $null }
+}
+
 # ── Step 1: Ensure SQL server has a system-assigned managed identity ──────────
 # Required for CREATE USER ... FROM EXTERNAL PROVIDER to resolve Entra identities.
 # Reference: https://aka.ms/sqlaadsetup
 Write-Host ""
 Write-Host "Checking SQL server managed identity..." -ForegroundColor Cyan
-$sqlServerJson = az sql server show `
+
+$sqlIdentityRaw = az sql server show `
     --resource-group $ResourceGroup `
     --name $SqlServerName `
-    --query "identity" -o json 2>&1 | ConvertFrom-Json
+    --query "identity" -o json 2>&1
+$sqlServerJson = try { $sqlIdentityRaw | ConvertFrom-Json } catch { $null }
 
 if ($null -eq $sqlServerJson -or $sqlServerJson.type -notmatch "SystemAssigned") {
     Write-Host "  Enabling system-assigned managed identity on SQL server..." -ForegroundColor Yellow
-    az sql server update `
-        --name $SqlServerName `
-        --resource-group $ResourceGroup `
-        -i `
-        --output none
-    $sqlServerJson = az sql server show `
+    az sql server update --name $SqlServerName --resource-group $ResourceGroup -i --output none
+    $sqlIdentityRaw = az sql server show `
         --resource-group $ResourceGroup `
         --name $SqlServerName `
-        --query "identity" -o json 2>&1 | ConvertFrom-Json
+        --query "identity" -o json 2>&1
+    $sqlServerJson = try { $sqlIdentityRaw | ConvertFrom-Json } catch { $null }
     Write-Host "✓ Managed identity enabled: $($sqlServerJson.principalId)" -ForegroundColor Green
 } else {
     Write-Host "✓ Managed identity already set: $($sqlServerJson.principalId)" -ForegroundColor Green
@@ -116,20 +126,20 @@ $sqlMIPrincipalId = $sqlServerJson.principalId
 
 # ── Step 2: Ensure SQL server MI has the Directory Readers Azure AD role ──────
 # Without this, FROM EXTERNAL PROVIDER queries fail with "Server identity is not configured."
+# This requires Privileged Role Administrator or Global Admin in Entra.
+# If the CI/CD caller lacks Graph permissions, the step warns and continues —
+# the role must then be assigned once by a human admin before SQL bootstrap succeeds.
 Write-Host ""
 Write-Host "Checking Directory Readers role membership..." -ForegroundColor Cyan
 
-# Find the Directory Readers role object ID
-$dirReadersRoleResp = az rest --method GET `
-    --url "https://graph.microsoft.com/v1.0/directoryRoles?`$filter=displayName eq 'Directory Readers'" `
-    -o json 2>&1 | ConvertFrom-Json
+$dirReadersRoleResp = Invoke-AzRestJson -Method GET `
+    -Url "https://graph.microsoft.com/v1.0/directoryRoles?`$filter=displayName eq 'Directory Readers'"
 
 if ($null -ne $dirReadersRoleResp -and $dirReadersRoleResp.value.Count -gt 0) {
     $dirReadersRoleId = $dirReadersRoleResp.value[0].id
-    
-    $membersResp = az rest --method GET `
-        --url "https://graph.microsoft.com/v1.0/directoryRoles/$dirReadersRoleId/members?`$select=id" `
-        -o json 2>&1 | ConvertFrom-Json
+
+    $membersResp = Invoke-AzRestJson -Method GET `
+        -Url "https://graph.microsoft.com/v1.0/directoryRoles/$dirReadersRoleId/members?`$select=id"
 
     $alreadyMember = $membersResp.value | Where-Object { $_.id -eq $sqlMIPrincipalId }
 
@@ -140,24 +150,21 @@ if ($null -ne $dirReadersRoleResp -and $dirReadersRoleResp.value.Count -gt 0) {
         $tempFile = [System.IO.Path]::GetTempFileName() + ".json"
         "{`"@odata.id`": `"https://graph.microsoft.com/v1.0/directoryObjects/$sqlMIPrincipalId`"}" `
             | Out-File -FilePath $tempFile -Encoding utf8 -NoNewline
-        
-        $addResult = az rest --method POST `
-            --url "https://graph.microsoft.com/v1.0/directoryRoles/$dirReadersRoleId/members/`$ref" `
-            --body "@$tempFile" `
-            --headers "Content-Type=application/json" 2>&1
-        
+        $addResult = Invoke-AzRestJson -Method POST `
+            -Url "https://graph.microsoft.com/v1.0/directoryRoles/$dirReadersRoleId/members/`$ref" `
+            -Body "@$tempFile" -Headers @{ "Content-Type" = "application/json" }
         Remove-Item $tempFile -ErrorAction SilentlyContinue
-        
-        if ($LASTEXITCODE -eq 0) {
+        if ($null -ne $addResult -or $LASTEXITCODE -eq 0) {
             Write-Host "✓ SQL server MI added to Directory Readers" -ForegroundColor Green
         } else {
-            Write-Host "⚠  Could not assign Directory Readers automatically (Graph permission may be absent)." -ForegroundColor Yellow
-            Write-Host "   Manually add principal '$sqlMIPrincipalId' to the Directory Readers role in Entra." -ForegroundColor Yellow
-            Write-Host "   SQL bootstrap will proceed but may fail if the role is not yet assigned." -ForegroundColor Yellow
+            Write-Host "⚠  Could not assign Directory Readers (Graph permission absent in CI)." -ForegroundColor Yellow
+            Write-Host "   Run bootstrap-github-oidc.ps1 or manually add principal '$sqlMIPrincipalId'" -ForegroundColor Yellow
+            Write-Host "   to the Directory Readers role in Entra before retrying." -ForegroundColor Yellow
         }
     }
 } else {
-    Write-Host "⚠  Could not query Directory Readers role. Proceeding — ensure the role is assigned manually." -ForegroundColor Yellow
+    Write-Host "⚠  Could not query Directory Readers role (Graph permission absent in CI)." -ForegroundColor Yellow
+    Write-Host "   Ensure '$sqlMIPrincipalId' has Directory Readers in Entra before running SQL bootstrap." -ForegroundColor Yellow
 }
 
 # Check if SQL Server and database exist
