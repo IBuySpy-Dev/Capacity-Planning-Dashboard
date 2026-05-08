@@ -27,10 +27,10 @@ jobs:
       deployment_ready: ${{ steps.verify.outputs.deployment_ready }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Azure Login (with Workload Identity Federation)
-        uses: azure/login@v1
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -40,7 +40,7 @@ jobs:
 
       - name: Azure Login (with Service Principal)
         if: steps.azure_login_wif.outcome == 'failure'
-        uses: azure/login@v1
+        uses: azure/login@v3
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
         continue-on-error: true
