@@ -92,16 +92,32 @@ jobs:
           cd deployment
           zip -r ../deployment.zip .
 
-      - name: Deploy to Azure App Service
+      - name: Clear stale Run-From-Package sentinel
         run: |
-          az webapp deploy \
+          # The sentinel file is left by Azure when OneDeploy/RunFromPackage init
+          # fails. It causes every subsequent restart to abort. Delete it via the
+          # Kudu VFS REST API using basic-auth publishing credentials.
+          CREDS=$(az webapp deployment list-publishing-credentials \
             --name ${{ env.AZURE_WEBAPP_NAME }} \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
             --subscription ${{ env.AZURE_SUBSCRIPTION_ID }} \
-            --type zip \
-            --src-path deployment.zip \
-            --clean true \
-            --async false
+            --query "{u:publishingUserName,p:publishingPassword}" -o json)
+          PUB_USER=$(echo "$CREDS" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['u'])")
+          PUB_PASS=$(echo "$CREDS" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['p'])")
+          SCM_HOST="${{ env.AZURE_WEBAPP_NAME }}.scm.azurewebsites.net"
+          FILE="FAILED TO INITIALIZE RUN FROM PACKAGE.txt"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+            "https://${SCM_HOST}/api/vfs/site/wwwroot/${FILE// /%20}" \
+            -u "$PUB_USER:$PUB_PASS")
+          echo "Kudu VFS DELETE status: $STATUS (404 = already gone, 200/204 = deleted)"
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          package: deployment.zip
+          resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
+          deployment-method: zipDeploy
 
       - name: Install sqlcmd
         run: |
