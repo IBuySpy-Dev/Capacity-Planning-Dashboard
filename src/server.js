@@ -3276,8 +3276,9 @@ async function startServer() {
   });
 }
 
+// Export app and startServer; auto-start only when run directly (not via server.js).
+module.exports = { app, startServer };
+
 if (require.main === module) {
   startServer();
-} else {
-  module.exports = { app };
 }
