@@ -27,7 +27,7 @@ jobs:
       deployment_ready: ${{ steps.verify.outputs.deployment_ready }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Azure Login (with Workload Identity Federation)
         uses: azure/login@v1
