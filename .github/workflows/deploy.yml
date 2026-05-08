@@ -98,6 +98,7 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: deployment.zip
           resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
+          deployment-method: zipDeploy
 
       - name: Install sqlcmd
         run: |
