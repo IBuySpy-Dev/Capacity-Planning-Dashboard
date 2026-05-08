@@ -7,8 +7,20 @@ param workloadSuffix = 'demo001'
 // Supply at deployment time for Azure SQL Entra admin configuration.
 param sqlEntraAdminLogin = 'user@contoso.com'
 param sqlEntraAdminObjectId = '00000000-0000-0000-0000-000000000000'
-param ingestApiKey = 'replace-with-secure-ingest-key'
-param sessionSecret = 'replace-with-session-secret'
+
+// ─── Secret parameters ─────────────────────────────────────────────────────
+//
+// On first deploy — or whenever you want to rotate — pass these at the CLI:
+//   az deployment group create ... \
+//     --parameters ingestApiKey="$(openssl rand -hex 32)" \
+//                  sessionSecret="$(openssl rand -hex 32)"
+//
+// After the first deploy the secrets live in Key Vault. Subsequent deploys can
+// omit these params and the app will continue reading them from Key Vault.
+// NEVER commit real secret values in this file.
+//
+// param ingestApiKey = ''   # Key Vault secret: capdash-ingest-api-key
+// param sessionSecret = ''  # Key Vault secret: capdash-session-secret
 
 // Use a distinct address space from dev so future peering or shared-network scenarios do not collide.
 param vnetAddressPrefix = '10.91.0.0/16'

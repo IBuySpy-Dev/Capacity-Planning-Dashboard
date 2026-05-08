@@ -50,12 +50,12 @@ param keyVaultPublicNetworkAccess string = 'Disabled'
 param workerSharedSecret string = ''
 
 @secure()
-@description('Shared secret used to authorize internal bootstrap and ingestion routes on the dashboard web app')
-param ingestApiKey string
+@description('Shared secret used to authorize internal bootstrap and ingestion routes on the dashboard web app. Leave empty when the secret already exists in Key Vault (capdash-ingest-api-key); supply on first deploy or to rotate the value.')
+param ingestApiKey string = ''
 
 @secure()
-@description('Session secret used by the dashboard web app session middleware')
-param sessionSecret string
+@description('Session secret used by the dashboard web app session middleware. Leave empty when the secret already exists in Key Vault (capdash-session-secret); supply on first deploy or to rotate the value.')
+param sessionSecret string = ''
 
 @description('Optional subscription IDs where the dashboard web app managed identity should receive Reader access for subscription discovery and read-only ARM queries.')
 param webReaderSubscriptionIds array = []
