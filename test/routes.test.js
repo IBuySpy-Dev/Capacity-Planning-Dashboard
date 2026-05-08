@@ -49,6 +49,77 @@ test('GET /api/sku-catalog/families responds without 401', async () => {
   assert.notEqual(res.status, 404);
 });
 
+// ─── GET /api/capacity/export ─────────────────────────────────────────────────
+
+// CSV export — default format (no ?format param) — returns text/csv attachment.
+test('GET /api/capacity/export returns CSV with correct Content-Type by default', async () => {
+  const res = await request(app).get('/api/capacity/export');
+  assert.equal(res.status, 200);
+  assert.ok(
+    String(res.headers['content-type'] || '').startsWith('text/csv'),
+    `expected text/csv, got ${res.headers['content-type']}`
+  );
+  assert.ok(
+    String(res.headers['content-disposition'] || '').includes('attachment'),
+    'content-disposition should indicate attachment'
+  );
+  assert.ok(
+    String(res.headers['content-disposition'] || '').includes('.csv'),
+    'content-disposition filename should end with .csv'
+  );
+});
+
+// CSV export — explicit ?format=csv.
+test('GET /api/capacity/export?format=csv returns text/csv', async () => {
+  const res = await request(app).get('/api/capacity/export?format=csv');
+  assert.equal(res.status, 200);
+  assert.ok(String(res.headers['content-type'] || '').startsWith('text/csv'));
+});
+
+// XLSX grid export — returns OOXML Content-Type.
+test('GET /api/capacity/export?format=xlsx returns XLSX Content-Type', async () => {
+  const res = await request(app).get('/api/capacity/export?format=xlsx&variant=grid');
+  assert.equal(res.status, 200);
+  assert.ok(
+    String(res.headers['content-type'] || '').includes('spreadsheetml'),
+    `expected spreadsheetml content-type, got ${res.headers['content-type']}`
+  );
+  assert.ok(
+    String(res.headers['content-disposition'] || '').includes('.xlsx'),
+    'content-disposition filename should end with .xlsx'
+  );
+});
+
+// XLSX report export — multi-sheet workbook with report summary.
+test('GET /api/capacity/export?format=xlsx&variant=report returns XLSX attachment with report prefix', async () => {
+  const res = await request(app).get('/api/capacity/export?format=xlsx&variant=report');
+  assert.equal(res.status, 200);
+  assert.ok(String(res.headers['content-type'] || '').includes('spreadsheetml'));
+  assert.ok(
+    String(res.headers['content-disposition'] || '').includes('capacity-dashboard-report'),
+    'report variant should use capacity-dashboard-report filename prefix'
+  );
+});
+
+// Unknown/invalid format values default to CSV — the route must not 400.
+test('GET /api/capacity/export?format=invalid falls back to CSV without error', async () => {
+  const res = await request(app).get('/api/capacity/export?format=invalid');
+  assert.equal(res.status, 200);
+  assert.ok(String(res.headers['content-type'] || '').startsWith('text/csv'));
+});
+
+// X-Export-Truncated is not set when row count is within the 50k cap.
+// Mock data is always well below 50 000 rows, so the header must be absent.
+test('GET /api/capacity/export does not set X-Export-Truncated when below cap', async () => {
+  const res = await request(app).get('/api/capacity/export');
+  assert.equal(res.status, 200);
+  assert.equal(
+    res.headers['x-export-truncated'],
+    undefined,
+    'X-Export-Truncated should not be set for small result sets'
+  );
+});
+
 // ─── Auth guard on protected routes ──────────────────────────────────────────
 
 // With AUTH_ENABLED=false the middleware calls next() for all /api paths, so
