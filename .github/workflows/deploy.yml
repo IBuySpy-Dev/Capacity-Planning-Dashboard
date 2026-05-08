@@ -93,12 +93,15 @@ jobs:
           zip -r ../deployment.zip .
 
       - name: Deploy to Azure App Service
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          package: deployment.zip
-          resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
-          deployment-method: zipDeploy
+        run: |
+          az webapp deploy \
+            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --subscription ${{ env.AZURE_SUBSCRIPTION_ID }} \
+            --type zip \
+            --src-path deployment.zip \
+            --clean true \
+            --async false
 
       - name: Install sqlcmd
         run: |
