@@ -72,3 +72,7 @@ terraform.rc
 .bicep/
 # Squad: SubSquad activation file (local to this machine)
 .squad-workstream
+
+# DACPAC build output
+sql/dacpac/bin/
+sql/dacpac/obj/

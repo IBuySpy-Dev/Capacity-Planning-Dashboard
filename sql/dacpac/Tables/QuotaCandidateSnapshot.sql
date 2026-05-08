@@ -1,0 +1,23 @@
+CREATE TABLE [dbo].[QuotaCandidateSnapshot] (
+    [candidateId]           BIGINT           IDENTITY (1, 1) NOT NULL,
+    [analysisRunId]         UNIQUEIDENTIFIER NOT NULL,
+    [capturedAtUtc]         DATETIME2 (7)    NOT NULL,
+    [sourceCapturedAtUtc]   DATETIME2 (7)    NULL,
+    [managementGroupId]     NVARCHAR (128)   NOT NULL,
+    [groupQuotaName]        NVARCHAR (128)   NOT NULL,
+    [subscriptionId]        NVARCHAR (64)    NOT NULL,
+    [subscriptionName]      NVARCHAR (256)   NOT NULL,
+    [region]                NVARCHAR (64)    NOT NULL,
+    [quotaName]             NVARCHAR (128)   NOT NULL,
+    [skuList]               NVARCHAR (MAX)   NULL,
+    [skuCount]              INT              NULL,
+    [availabilityState]     NVARCHAR (32)    NOT NULL,
+    [quotaCurrent]          INT              NOT NULL,
+    [quotaLimit]            INT              NOT NULL,
+    [quotaAvailable]        INT              NOT NULL,
+    [suggestedMovable]      INT              NOT NULL,
+    [safetyBuffer]          INT              NOT NULL,
+    [subscriptionHash]      NVARCHAR (128)   NOT NULL,
+    [candidateStatus]       NVARCHAR (32)    NOT NULL,
+    CONSTRAINT [PK_QuotaCandidateSnapshot] PRIMARY KEY CLUSTERED ([candidateId] ASC)
+);
