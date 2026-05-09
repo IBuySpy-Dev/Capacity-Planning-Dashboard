@@ -1,0 +1,116 @@
+name: SQL Schema (DACPAC)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sql/dacpac/**'
+      - '.github/workflows/sql-schema.yml'
+  workflow_dispatch:
+
+# CRITICAL: never cancel an in-flight DB deployment — partial execution can leave
+# the schema in an inconsistent state. See docs/guardrails/db-deployment-concurrency.md
+concurrency:
+  group: sql-schema-deploy
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  SQL_SERVER: ${{ vars.SQL_SERVER_NAME }}
+  SQL_DATABASE: ${{ vars.SQL_DATABASE_NAME }}
+
+jobs:
+  build-dacpac:
+    name: Build DACPAC
+    runs-on: ubuntu-latest
+    outputs:
+      dacpac-path: ${{ steps.build.outputs.dacpac-path }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+
+      - name: Build DACPAC
+        id: build
+        working-directory: sql/dacpac
+        run: |
+          dotnet build capdash.sqlproj --configuration Release
+          DACPAC=$(find . -name "*.dacpac" | head -1)
+          echo "dacpac-path=sql/dacpac/$DACPAC" >> "$GITHUB_OUTPUT"
+          echo "Built: $DACPAC"
+
+      - name: Upload DACPAC artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: capdash-dacpac
+          path: sql/dacpac/bin/Release/*.dacpac
+          retention-days: 7
+
+  deploy-schema:
+    name: Deploy Schema
+    needs: build-dacpac
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Azure (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Add runner IP to SQL firewall
+        run: |
+          RUNNER_IP=$(curl -s https://api.ipify.org)
+          echo "Adding $RUNNER_IP to SQL firewall..."
+          az sql server firewall-rule create \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --server "${{ env.SQL_SERVER }}" \
+            --name "github-actions-runner-${{ github.run_id }}" \
+            --start-ip-address "$RUNNER_IP" \
+            --end-ip-address "$RUNNER_IP"
+
+      - name: Download DACPAC artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: capdash-dacpac
+          path: dacpac-out
+
+      - name: Install sqlpackage
+        run: dotnet tool install -g microsoft.sqlpackage
+
+      - name: Get Azure SQL access token
+        id: token
+        run: |
+          TOKEN=$(az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv)
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy DACPAC
+        run: |
+          sqlpackage publish \
+            /SourceFile:"dacpac-out/capdash.dacpac" \
+            /TargetServerName:"${{ env.SQL_SERVER }}.database.windows.net" \
+            /TargetDatabaseName:"${{ env.SQL_DATABASE }}" \
+            /AccessToken:"${{ steps.token.outputs.token }}" \
+            /p:BlockOnPossibleDataLoss=false \
+            /p:IgnorePermissions=true \
+            /p:CreateNewDatabase=false \
+            /p:DropObjectsNotInSource=false
+
+      - name: Remove runner IP from SQL firewall
+        if: always()
+        run: |
+          az sql server firewall-rule delete \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --server "${{ env.SQL_SERVER }}" \
+            --name "github-actions-runner-${{ github.run_id }}" \
+            --yes 2>/dev/null || true
