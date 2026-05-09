@@ -347,6 +347,52 @@ try {
     Write-Info "  gh variable set <NAME> --body '<VALUE>' --env $EnvironmentName --repo $repo"
 }
 
+# Discover the root management group (its name equals the tenant ID) and store it as a
+# repo-level variable so bicep-deploy.yml can pass it to Bicep as quotaManagementGroupId
+# and assign Management Group Reader to the web app managed identity post-deploy.
+Write-Section "Configuring management group access..."
+$RootManagementGroupId = $TenantId   # Root MG name is always the tenant ID in Azure
+
+# Try to list MGs to confirm access; fall back to root MG derived from tenant ID.
+try {
+    $detectedMg = az account management-group list --query "[?properties.parent==null].name | [0]" -o tsv 2>$null
+    if ($LASTEXITCODE -eq 0 -and $detectedMg) {
+        $RootManagementGroupId = $detectedMg.Trim()
+        Write-Success "Detected root management group: $RootManagementGroupId"
+    } else {
+        Write-Info "Could not enumerate management groups — using tenant ID as root MG: $RootManagementGroupId"
+    }
+} catch {
+    Write-Info "Management group enumeration skipped — using tenant ID as root MG: $RootManagementGroupId"
+}
+
+# Store as an environment variable so bicep-deploy.yml can reference it.
+try {
+    gh variable set AZURE_MANAGEMENT_GROUP_ID --body "$RootManagementGroupId" --env $EnvironmentName --repo $repo
+    Write-Success "AZURE_MANAGEMENT_GROUP_ID set to $RootManagementGroupId"
+} catch {
+    Write-Warning "Could not set AZURE_MANAGEMENT_GROUP_ID: $_"
+    Write-Info "Set manually: gh variable set AZURE_MANAGEMENT_GROUP_ID --body '$RootManagementGroupId' --env $EnvironmentName --repo $repo"
+}
+
+# Grant the deployment SPN User Access Administrator at the management group scope so that
+# bicep-deploy.yml can assign Management Group Reader to the web app managed identity post-deploy.
+Write-Section "Granting User Access Administrator at management group scope..."
+$mgScope = "/providers/Microsoft.Management/managementGroups/$RootManagementGroupId"
+try {
+    az role assignment create `
+        --assignee $ClientId `
+        --role "User Access Administrator" `
+        --scope $mgScope `
+        --output none
+    Write-Success "User Access Administrator granted at $mgScope"
+} catch {
+    Write-Warning "Could not assign User Access Administrator at MG scope: $_"
+    Write-Info "This is needed for bicep-deploy.yml to grant Management Group Reader to the web app identity."
+    Write-Info "If you have permissions, assign manually:"
+    Write-Info "  az role assignment create --assignee $ClientId --role 'User Access Administrator' --scope '$mgScope'"
+}
+
 # Enable GitHub Pages with GitHub Actions as the build source (idempotent)
 Write-Section "Configuring GitHub Pages..."
 try {
@@ -472,7 +518,11 @@ Write-Host "  - Environment: $EnvironmentName"
 Write-Host ""
 Write-Host "✓ GitHub Environment Variables Set" -ForegroundColor $COLORS.Success
 Write-Host "  Environment: $EnvironmentName"
-Write-Host "  Variables: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_RESOURCE_GROUP"
+Write-Host "  Variables: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_RESOURCE_GROUP, AZURE_MANAGEMENT_GROUP_ID"
+Write-Host ""
+Write-Host "✓ Management Group Configured" -ForegroundColor $COLORS.Success
+Write-Host "  Root MG: $RootManagementGroupId"
+Write-Host "  Deployment SPN granted User Access Administrator at MG scope (enables post-deploy MG Reader assignment)"
 Write-Host ""
 Write-Host "✓ GitHub Pages Configured" -ForegroundColor $COLORS.Success
 Write-Host "  Source: GitHub Actions (docs.yml deploys on push to main)"

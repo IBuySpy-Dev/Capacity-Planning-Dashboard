@@ -411,15 +411,23 @@ async function listManagementGroups() {
 
     return mappedGroups;
   } catch (error) {
-    if (fallbackManagementGroupIds.length === 0) {
-      throw error;
+    if (fallbackManagementGroupIds.length > 0) {
+      return fallbackManagementGroupIds.map((fallbackId) => ({
+        id: fallbackId,
+        displayName: fallbackId,
+        tenantId: null
+      }));
     }
 
-    return fallbackManagementGroupIds.map((fallbackId) => ({
-      id: fallbackId,
-      displayName: fallbackId,
-      tenantId: null
-    }));
+    // Management Group access is optional — quota pooling features require MG Reader RBAC.
+    // Return empty list so the Quota tab degrades gracefully rather than erroring.
+    const status = error?.response?.status || error?.status;
+    if (status === 403 || status === 401) {
+      console.warn('[quota] Management Group listing returned %s — identity may lack Management Group Reader role. Quota group features unavailable.', status);
+      return [];
+    }
+
+    throw error;
   }
 }
 

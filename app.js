@@ -1962,6 +1962,9 @@ async function loadManagementGroups() {
 
     managementGroupOptions = Array.isArray(payload.groups) ? payload.groups : [];
     renderManagementGroupOptions(managementGroupOptions, payload.defaultManagementGroupId);
+    if (payload.warning) {
+      setQuotaDiscoveryStatus(payload.warning, 'warn');
+    }
   } catch (error) {
     managementGroupOptions = [];
     renderManagementGroupOptions([], null);

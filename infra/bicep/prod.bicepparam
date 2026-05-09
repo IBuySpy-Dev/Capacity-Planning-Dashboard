@@ -30,6 +30,7 @@ param authEnabled = true
 // When running manually: az deployment group create ... --parameters prod.bicepparam
 //   entraTenantId=<value> entraClientId=<value> entraClientSecret=<value>
 //   adminGroupId=<value> ingestApiKey=<value> sessionSecret=<value>
+//   quotaManagementGroupId=<tenantId>
 //
 // param entraTenantId      = '<AZURE_ENTRA_TENANT_ID>'      -- GitHub secret: ENTRA_TENANT_ID
 // param entraClientId      = '<AZURE_ENTRA_CLIENT_ID>'      -- GitHub secret: ENTRA_CLIENT_ID
@@ -37,3 +38,8 @@ param authEnabled = true
 // param adminGroupId       = '<ADMIN_GROUP_OBJECT_ID>'      -- GitHub secret: ADMIN_GROUP_ID
 // param ingestApiKey       = '<INGEST_API_KEY>'             -- GitHub secret: INGEST_API_KEY
 // param sessionSecret      = '<SESSION_SECRET>'             -- GitHub secret: SESSION_SECRET
+//
+// quotaManagementGroupId is passed by bicep-deploy.yml from vars.AZURE_MANAGEMENT_GROUP_ID
+// (set automatically by bootstrap-github-oidc.ps1 to the tenant root management group).
+// This sets the QUOTA_MANAGEMENT_GROUP_ID app setting and triggers post-deploy
+// Management Group Reader RBAC assignment to the web app managed identity.
