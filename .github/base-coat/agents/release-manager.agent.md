@@ -9,6 +9,7 @@ metadata:
   audience: ["devops-engineers", "release-managers", "platform-teams"]
 allowed-tools: ["bash", "git", "gh", "grep"]
 model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Release Manager Agent
@@ -256,9 +257,20 @@ DRY RUN — Release v<NEXT_VERSION>
 | Dirty working tree | Stop with error — require clean state |
 
 ## Model
+
 **Recommended:** claude-sonnet-4.6
 **Rationale:** Version classification, changelog generation, and release decisions need good reasoning
 **Minimum:** claude-haiku-4.5
+
+## Output Format
+
+| Section | Content |
+|---|---|
+| **Version** | Computed next version (major/minor/patch) with semver rationale |
+| **Changelog Entry** | Keep a Changelog–formatted entry with Added/Fixed/Changed sections |
+| **Git Tag** | Tag name created (e.g. `v3.16.0`) |
+| **GitHub Release** | Release title, body, and URL after publication |
+| **Dry Run Report** | Changes that would be made without executing (when `--dry-run` is passed) |
 
 ## Governance
 

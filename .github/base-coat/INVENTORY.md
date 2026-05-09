@@ -244,9 +244,13 @@ This catalog helps teams discover what exists in Base Coat and when to use it.
 | `.githooks/commit-msg`                                                     | block commits when message contains sensitive data          | hook, commit-msg, security, pii        |
 | `scripts/package-basecoat.sh`                                              | create release artifacts on macOS and Linux                 | package, tar.gz, zip, checksum         |
 | `scripts/package-basecoat.ps1`                                             | create release artifacts on Windows                         | package, zip, checksum, powershell     |
+| `scripts/audit-assets.ps1`                                                 | quality scoring rubric for all assets; outputs table/markdown/JSON; grades A–F; max 10 pts per asset | audit, quality, scoring, grade, powershell |
+| `scripts/check-coherence.ps1`                                              | cross-asset conflict detection: orphaned skill refs, keyword contradictions, scope overlaps, deprecated refs, duplicate descriptions; non-blocking CI warning | coherence, conflict, orphaned, contradiction, powershell |
+| `scripts/adoption/detect-basecoat.ps1`                                     | per-repo adoption detection; `-AssetDetail` flag enables per-asset adoption rate across consumer repos | adoption, detect, consumer, asset-detail, powershell |
 | `.github/workflows/validate-basecoat.yml`                                  | validate repo structure on push and pull request            | workflow, ci, validation               |
 | `.github/workflows/validate-repo-template-sample.yml`                      | validate sample repository template assets and contracts    | workflow, template, governance, ci     |
 | `.github/workflows/prd-spec-gate.yml`                                      | enforce PRD/spec references on risky or large pull requests | workflow, prd, spec, governance        |
+| `.github/workflows/asset-health.yml`                                       | weekly Monday 08:00 UTC health report; posts to GitHub Step Summary; opens issue if any asset grades F | workflow, health, weekly, grade, issue |
 | `.github/workflows/package-basecoat.yml`                                   | package and publish release artifacts                       | workflow, release, package, artifact   |
 | `.github/PULL_REQUEST_TEMPLATE.md`                                         | pull request template with PRD/spec reference fields        | pull request, template, prd, spec      |
 | `examples/workflows/bootstrap-from-release.yml`                            | install a pinned Base Coat release into a new repo          | workflow, bootstrap, pinned release    |
@@ -259,6 +263,7 @@ This catalog helps teams discover what exists in Base Coat and when to use it.
 
 | File                  | Use For                                                                                      | Keywords                           |
 | --------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------- |
-| `tests/run-tests.ps1` | smoke tests for validation, packaging, hooks, and commit-message scanning on Windows         | test, powershell, smoke, packaging |
-| `tests/run-tests.sh`  | smoke tests for validation, packaging, hooks, and commit-message scanning on macOS and Linux | test, bash, smoke, packaging       |
-| `tests/README.md`     | test suite scope and execution commands                                                      | tests, docs, usage                 |
+| `tests/run-tests.ps1`          | smoke tests for validation, packaging, hooks, and commit-message scanning on Windows         | test, powershell, smoke, packaging |
+| `tests/run-tests.sh`           | smoke tests for validation, packaging, hooks, and commit-message scanning on macOS and Linux | test, bash, smoke, packaging       |
+| `tests/quality-gate-tests.ps1` | CI-blocking quality gate: enforces avg score ≥ 5.0, red% ≤ 50%, no zero-score assets, all category avgs ≥ 4.0 | test, quality-gate, ci, powershell, scoring |
+| `tests/README.md`              | test suite scope and execution commands                                                      | tests, docs, usage                 |

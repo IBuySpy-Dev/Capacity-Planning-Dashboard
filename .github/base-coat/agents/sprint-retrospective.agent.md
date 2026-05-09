@@ -9,6 +9,7 @@ metadata:
   audience: ["scrum-masters", "team-leads", "agile-coaches"]
 allowed-tools: ["bash", "git"]
 model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Sprint Retrospective Agent

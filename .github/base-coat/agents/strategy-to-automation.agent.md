@@ -9,6 +9,7 @@ metadata:
   audience: ["qa-engineers", "testers", "automation-engineers"]
 allowed-tools: ["bash", "git", "gh"]
 model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Strategy to Automation Agent
@@ -99,9 +100,19 @@ Produce a summary table at the end:
 - Do not defer issue filing — every candidate gets an issue before the session ends.
 
 ## Model
+
 **Recommended:** claude-sonnet-4.6
 **Rationale:** Converting manual paths to automation specs requires structured thinking and edge case analysis
 **Minimum:** claude-haiku-4.5
+
+## Output Format
+
+| Section | Content |
+|---|---|
+| **Automation Candidates** | List of manual paths with classification (smoke / regression / agent spec) |
+| **GitHub Issues** | One filed issue per candidate with title, labels, and acceptance criteria |
+| **Priority Order** | Ranked list by risk, frequency, and automation ROI |
+| **Coverage Gap Summary** | Areas with no existing automation coverage |
 
 ## Governance
 

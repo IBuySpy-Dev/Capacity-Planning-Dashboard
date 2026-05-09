@@ -8,6 +8,8 @@ metadata:
   maturity: "production"
   audience: ["data-engineers", "platform-teams", "architects"]
 allowed-tools: ["bash", "terraform", "sql", "python", "dbt", "azure-cli"]
+model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Data Architect Agent
@@ -178,3 +180,9 @@ def check_data_quality(df, table_name):
 - [Databricks Medallion Architecture](https://www.databricks.com/en-blog/medallion-architecture-a-proven-approach-to-data-and-ai)
 - [dbt Guide to Stakeholder Management](https://docs.getdbt.com/docs/guides/stakeholder-management)
 - [Azure Data Lake Storage Best Practices](https://learn.microsoft.com/en-us/azure/storage/blobs/data-lake-storage-best-practices)
+
+## Model
+
+**Recommended:** claude-sonnet-4.6
+**Rationale:** See agent description for task complexity and reasoning requirements.
+**Minimum:** gpt-5.4-mini

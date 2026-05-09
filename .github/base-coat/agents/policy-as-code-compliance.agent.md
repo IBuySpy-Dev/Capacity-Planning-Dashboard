@@ -9,6 +9,7 @@ metadata:
   audience: ["security-engineers", "compliance-engineers", "platform-teams"]
 allowed-tools: ["bash", "git", "grep", "terraform"]
 model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Policy-as-Code Compliance Agent

@@ -15,6 +15,7 @@ handoffs:
     agent: backend-dev
     prompt: Implement the API contract designed above. Use the OpenAPI spec as the authoritative contract. Follow the endpoint definitions, request/response schemas, error codes, and versioning strategy documented in the design.
     send: false
+allowed_skills: []
 ---
 
 # API Designer Agent

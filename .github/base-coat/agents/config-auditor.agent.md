@@ -9,6 +9,7 @@ metadata:
   audience: ["security-engineers", "devops-engineers", "platform-teams"]
 allowed-tools: ["bash", "git", "grep"]
 model: claude-haiku-4.5
+allowed_skills: []
 ---
 
 # Config Auditor Agent

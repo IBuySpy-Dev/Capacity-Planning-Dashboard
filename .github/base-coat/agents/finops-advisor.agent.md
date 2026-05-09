@@ -7,6 +7,8 @@ metadata:
   keywords: "finops, cost-optimization, cloud-cost, governance, chargeback, showback"
   model-tier: "premium"
 allowed-tools: "search/codebase bash"
+model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # FinOps Advisor

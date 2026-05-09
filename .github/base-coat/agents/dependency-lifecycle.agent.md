@@ -9,6 +9,7 @@ metadata:
   audience: ["developers", "platform-teams", "tech-leads"]
 allowed-tools: ["bash", "git", "grep"]
 model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Dependency Lifecycle Agent
@@ -192,3 +193,19 @@ The agent tracks:
 | Migration Guide | Step-by-step instructions and code examples for major version transitions |
 | Lock File Changes | Updated dependency specifications and resolution information |
 | Testing Plan | Test coverage requirements and validation procedures for the upgrade |
+
+## Model
+
+**Recommended:** claude-sonnet-4.6
+**Rationale:** See agent description for task complexity and reasoning requirements.
+**Minimum:** gpt-5.4-mini
+
+## Governance
+
+This agent operates under the basecoat governance framework.
+
+- **Issue-first**: Do not make code changes without a logged GitHub issue.
+- **PRs only**: Never commit directly to `main`. Open a PR, self-approve if needed.
+- **No secrets**: Never commit credentials, tokens, API keys, or sensitive data.
+- **Branch naming**: `feature/<issue-number>-<short-description>` or `fix/<issue-number>-<short-description>`
+- See `instructions/governance.instructions.md` for the full governance reference.

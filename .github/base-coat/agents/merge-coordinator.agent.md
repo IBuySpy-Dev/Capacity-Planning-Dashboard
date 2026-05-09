@@ -9,6 +9,7 @@ metadata:
   audience: ["devops-engineers", "platform-teams", "developers"]
 allowed-tools: ["bash", "git", "gh"]
 model: claude-haiku-4.5
+allowed_skills: []
 ---
 
 # Merge Coordinator Agent

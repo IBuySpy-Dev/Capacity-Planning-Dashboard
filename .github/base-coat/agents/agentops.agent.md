@@ -9,6 +9,7 @@ metadata:
   audience: ["platform-teams", "devops-engineers", "ai-engineers"]
 allowed-tools: ["bash", "git", "gh"]
 model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # AgentOps Agent

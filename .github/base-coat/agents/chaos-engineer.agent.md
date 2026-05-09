@@ -9,6 +9,7 @@ metadata:
   audience: ["sre", "platform-teams", "reliability-engineers"]
 allowed-tools: ["bash", "git", "terraform", "kubernetes"]
 model: gpt-5.3-codex
+allowed_skills: []
 ---
 
 # Chaos Engineering Agent

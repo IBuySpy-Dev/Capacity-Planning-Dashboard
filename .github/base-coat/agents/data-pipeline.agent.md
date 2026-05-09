@@ -11,6 +11,7 @@ metadata:
   maturity: "beta"
   audience: ["developers"]
 allowed-tools: ["bash", "git", "grep", "find"]
+allowed_skills: []
 ---
 
 # Data Pipeline Agent

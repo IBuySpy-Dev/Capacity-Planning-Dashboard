@@ -9,6 +9,7 @@ metadata:
   audience: ["platform-teams", "devops-engineers", "architects"]
 allowed-tools: ["bash", "git", "gh"]
 model: claude-haiku-4.5
+allowed_skills: []
 ---
 
 # Roll Out Base Coat Agent

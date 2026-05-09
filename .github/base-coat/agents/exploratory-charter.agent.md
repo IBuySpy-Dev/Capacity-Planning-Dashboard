@@ -14,6 +14,7 @@ handoffs:
     agent: strategy-to-automation
     prompt: Review the exploratory testing findings above and generate automation candidates. For each charter finding that is a good automation candidate, map it to a smoke test, regression tier, or agent spec, and file a GitHub Issue.
     send: false
+allowed_skills: []
 ---
 
 # Exploratory Charter Agent

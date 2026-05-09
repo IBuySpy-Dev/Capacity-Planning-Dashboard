@@ -14,6 +14,7 @@ handoffs:
     agent: security-analyst
     prompt: Perform a security review of the code reviewed above. Focus on the critical and high findings flagged in the code review, and evaluate the new endpoints and data flows for OWASP Top 10 vulnerabilities.
     send: false
+allowed_skills: []
 ---
 
 # Code Review Agent

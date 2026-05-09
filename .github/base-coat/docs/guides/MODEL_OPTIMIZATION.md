@@ -10,8 +10,8 @@ Choosing the right LLM for each agent role is a cost-performance tradeoff. Defau
 
 | Role | Recommended Model | Tier | Rationale |
 |------|------------------|------|-----------|
-| architect | claude-opus-4.6 | Premium | High-stakes design decisions requiring deep, multi-step reasoning |
-| security_analyst | claude-opus-4.6 | Premium | Security analysis requires thorough reasoning and cannot afford shortcuts |
+| architect | claude-opus-4.7 | Premium | High-stakes design decisions requiring deep, multi-step reasoning |
+| security_analyst | claude-opus-4.7 | Premium | Security analysis requires thorough reasoning and cannot afford shortcuts |
 | reviewer / code-review | claude-sonnet-4.6 | Reasoning | Nuanced code analysis but not premium-tier complexity |
 | researcher | claude-sonnet-4.6 | Reasoning | Analysis and synthesis require good reasoning depth |
 | qa / manual-test-strategy / exploratory-charter / strategy-to-automation | claude-sonnet-4.6 | Reasoning | Structured thinking, edge case identification, test design |
@@ -25,11 +25,11 @@ Choosing the right LLM for each agent role is a cost-performance tradeoff. Defau
 
 ## Tier Definitions
 
-### Premium — `claude-opus-4.6`
+### Premium — `claude-opus-4.7`
 
 Use for tasks where a mistake is expensive or irreversible: architecture decisions, security reviews, threat modeling, compliance analysis. These tasks require deep multi-step reasoning, weighing tradeoffs, and producing output that will be trusted without a second opinion.
 
-**Cost:** ~5× Sonnet. Use deliberately.
+**Cost:** ~5× Sonnet. Use deliberately. Variants: `claude-opus-4.7-high` (extended chain-of-thought), `claude-opus-4.6` (proven fallback).
 
 ### Reasoning — `claude-sonnet-4.6`
 
@@ -59,7 +59,7 @@ Override the recommended model when:
 |-----------|-------------------|---------|
 | Task is unusually complex for the role | ↑ Upgrade one tier | A backend-dev task involving a complex distributed transaction → claude-sonnet-4.6 |
 | Task is unusually simple for the role | ↓ Downgrade one tier | A code-review of a single-line typo fix → claude-haiku-4.5 |
-| Output will not be human-reviewed | ↑ Upgrade one tier | Automated security scan running unattended → claude-opus-4.6 |
+| Output will not be human-reviewed | ↑ Upgrade one tier | Automated security scan running unattended → claude-opus-4.7 |
 | Output will be heavily reviewed | ↓ Downgrade one tier | Draft PR description that a human will rewrite anyway → claude-haiku-4.5 |
 | Budget is constrained | ↓ Use minimum viable tier | See the Minimum column in each agent's `## Model` section |
 | Task requires cross-domain reasoning | ↑ Upgrade one tier | A backend-dev task that also requires security analysis → claude-sonnet-4.6 |
@@ -72,11 +72,12 @@ Rough relative cost per million tokens (input + output blended):
 
 | Model | Relative Cost | Best For |
 |-------|--------------|----------|
-| claude-opus-4.6 | 5.0× | Architecture, security, high-stakes reasoning |
+| claude-opus-4.7 | 5.0× | Architecture, security, high-stakes reasoning |
 | claude-sonnet-4.6 | 1.0× (baseline) | Analysis, review, planning, test strategy |
 | gpt-5.3-codex | ~1.0× | Code generation, refactoring, debugging |
 | claude-haiku-4.5 | 0.1× | Routine automation, scanning, simple tasks |
 | gpt-5.4-mini | 0.08× | Simple automation, monitoring, formatting |
+| gpt-4.1 | 0.05× | Binary checks, guardrails, cheapest |
 
 **Rule of thumb:** If 10 Haiku runs cost less than 1 Sonnet run _and_ the Haiku output is good enough, use Haiku. If a single Opus run saves you from a production incident, use Opus.
 

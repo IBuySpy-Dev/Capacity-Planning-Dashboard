@@ -4,7 +4,7 @@ Maps each agent and skill to the **specific model** best suited for its workload
 Use this guide when configuring `model:` overrides in agent YAML files or when
 selecting models for skill invocations.
 
-## Available Models (19 deployed)
+## Available Models (18 deployed)
 
 ### Premium Tier (Reasoning)
 
@@ -17,7 +17,6 @@ selecting models for skill invocations.
 | Claude Opus 4.6 | standard | Stable predecessor, proven | Fallback for Opus 4.7 tasks |
 | Claude Opus 4.6 (1M) | 1M tokens | Long-context predecessor | Fallback for large-context tasks |
 | Claude Opus 4.5 | standard | Earlier generation, cost-effective | Secondary reasoning workloads |
-| GPT-5.5 | standard | Broad knowledge, cross-domain | Strategy, regulatory, business logic |
 
 ### Standard Tier (Balanced)
 
@@ -47,14 +46,14 @@ selecting models for skill invocations.
 | Agent | Primary Model | Fallback | Rationale |
 |-------|---------------|----------|-----------|
 | api-designer | Opus 4.7 High | Opus 4.7 | API contracts benefit from extended reasoning |
-| containerization-planner | GPT-5.5 | Opus 4.6 | Broad infra knowledge + long-context planning |
+| containerization-planner | Claude Opus 4.7 | Opus 4.6 | Broad infra knowledge + long-context planning |
 | incident-responder | Opus 4.7 | Opus 4.6 | Real-time multi-signal correlation under pressure |
 | legacy-modernization | Opus 4.7 (1M) | Opus 4.6 (1M) | Needs entire-codebase context for migration |
-| policy-as-code-compliance | GPT-5.5 | Opus 4.5 | Regulatory cross-referencing, policy reasoning |
-| product-manager | GPT-5.5 | Opus 4.5 | Strategy synthesis, stakeholder trade-offs |
+| policy-as-code-compliance | Claude Opus 4.7 | Opus 4.5 | Regulatory cross-referencing, policy reasoning |
+| product-manager | Claude Opus 4.7 | Opus 4.5 | Strategy synthesis, stakeholder trade-offs |
 | security-analyst | Opus 4.7 XHigh | Opus 4.7 | Exploit chain analysis needs deepest reasoning |
 | solution-architect | Opus 4.7 High | Opus 4.7 | Multi-system design, trade-off evaluation |
-| strategy-to-automation | GPT-5.5 | Opus 4.5 | Business-to-technical translation, broad scope |
+| strategy-to-automation | Claude Opus 4.7 | Opus 4.5 | Business-to-technical translation, broad scope |
 
 ### Balanced Tier (Standard implementation, code generation, reviews)
 
@@ -112,10 +111,10 @@ selecting models for skill invocations.
 |-------|---------------|----------|-----------|
 | architecture | Opus 4.7 High | Opus 4.7 | System design decisions, trade-offs |
 | azure-landing-zone | Opus 4.7 (1M) | Opus 4.7 | Enterprise-scale IaC, large template sets |
-| azure-waf-review | GPT-5.5 | Opus 4.5 | WAF pillar cross-referencing, broad assessment |
+| azure-waf-review | GPT-5.4 | Opus 4.5 | WAF pillar cross-referencing, broad assessment |
 | identity-migration | Opus 4.7 | Opus 4.6 | Auth flow mapping, security-sensitive migration |
 | security | Opus 4.7 XHigh | Opus 4.7 | Threat modeling, vulnerability analysis |
-| service-bus-migration | GPT-5.5 | Opus 4.5 | Messaging pattern translation, state handling |
+| service-bus-migration | GPT-5.4 | Sonnet 4.6 | Messaging pattern translation, state handling |
 
 ### Standard Skills (Balanced tier)
 
@@ -158,11 +157,10 @@ selecting models for skill invocations.
 
 | Model | Agents | Skills | Total |
 |-------|--------|--------|-------|
-| Claude Opus 4.7 | 1 | 1 | 2 |
+| Claude Opus 4.7 | 5 | 1 | 6 |
 | Claude Opus 4.7 (1M) | 1 | 1 | 2 |
 | Claude Opus 4.7 High | 2 | 1 | 3 |
 | Claude Opus 4.7 XHigh | 1 | 1 | 2 |
-| GPT-5.5 | 4 | 2 | 6 |
 | Claude Sonnet 4.6 | 14 | 12 | 26 |
 | GPT-5.4 | 10 | 8 | 18 |
 | GPT-5.3-Codex | 5 | 5 | 10 |
@@ -191,7 +189,7 @@ When choosing a model for a new agent or skill:
 1. **Needs deepest reasoning (security, exploit chains)?** → Opus 4.7 XHigh
 2. **Complex architecture or design trade-offs?** → Opus 4.7 High
 3. **Large codebase / huge context needed?** → Opus 4.7 (1M) or Opus 4.6 (1M)
-4. **Cross-domain strategy or regulation?** → GPT-5.5
+4. **Cross-domain strategy or regulation?** → `Claude Opus 4.7`
 5. **Generates code as primary output?** → GPT-5.3-Codex (or 5.2-Codex fallback)
 6. **Produces structured config/YAML/IaC?** → GPT-5.4
 7. **Requires nuanced judgment (reviews, prose)?** → Sonnet 4.6

@@ -63,55 +63,9 @@ Sections 1–8 are required. Omitting any of them is a review-blocking finding. 
 
 ## Allowed Skills Section
 
-Every agent file **should** include an `## Allowed Skills` section declaring the skills the agent is permitted to invoke at runtime.
+Every agent file **should** include an `## Allowed Skills` section. List each skill by folder name, one per line. If none, include `*(none)*`. An agent must not invoke skills not listed; stop and report blockers rather than searching unrelated skills.
 
-- List each skill by its folder name (e.g., `agent-design`, `api-design`). One entry per line.
-- If the agent does not invoke any skills, include the section with `*(none)*` as the only content.
-- When present, the `## Allowed Skills` section is the authoritative allow-list. An agent must not invoke any skill that is not listed there, even if that skill is shown in the `<available_skills>` context. This is consistent with the `allowed_skills` frontmatter field — both mechanisms filter the available skills to only those explicitly listed.
-- If the agent's primary tool is unavailable, the agent must stop and report the blocker — it must not search unrelated skills as a workaround.
-- Use a negative constraint sentence after the list when the scope exclusion is non-obvious, for example: `This agent requires GitHub issue tools only. Do not invoke design, code-generation, or infrastructure skills.`
-
-```markdown
-## Allowed Skills
-
-*(none)*
-```
-
-```markdown
-## Allowed Skills
-
-- agent-design
-- create-skill
-
-This agent creates and validates agent definitions only. Do not invoke development, deployment, or testing skills.
-```
-
-## Agent-to-Skill Pairing
-
-Each agent may have a companion skill directory under `skills/<agent-name>/` containing templates, checklists, and reference materials.
-
-- The skill directory name **must** match the agent's `name` field (e.g., agent `backend-dev` pairs with `skills/backend-dev/`).
-- If an agent references a template or checklist, it must exist in the paired skill directory. Do not reference files that do not exist.
-- Shared resources used by multiple agents belong in a skill directory named after the domain, not a specific agent (e.g., `skills/security/` for security templates used by both `security-analyst` and `backend-dev`).
-- When creating a new agent, create its skill directory at the same time if the agent references any templates or checklists.
-
-## Multi-Agent Coordination
-
-### Handoff Protocols
-
-When agents collaborate on a shared workflow (e.g., PR review, feature delivery), follow these rules:
-
-1. **Explicit tagging** — An agent hands off by @-mentioning the next agent in a review comment or output, stating the reason for handoff.
-2. **Contract-first** — The agent that defines a shared interface (API contract, schema, message format) owns it. Other agents consume the contract and must not unilaterally change it.
-3. **Conflict resolution** — When two agents disagree on a shared surface, the agent closest to the risk owns the decision: `security-analyst` for security, `performance-analyst` for performance, `backend-dev` for API contracts.
-4. **No scope leakage** — Agents must not perform work outside their stated purpose. If a `frontend-dev` agent discovers a backend bug, it files an issue and tags `backend-dev` — it does not fix the backend code.
-5. **Parallel by default** — Agents with non-overlapping scopes review and act in parallel. Sequential ordering is required only when one agent's output is a prerequisite for another.
-
-### @-Mention Conventions
-
-- Use the agent's `name` field as the handle: `@backend-dev`, `@security-analyst`.
-- When tagging, include a one-line reason: `@security-analyst — this PR adds a new public endpoint that accepts user input; security review required.`
-- Agents that are tagged must respond. Silence is not an acceptable acknowledgment.
+See [`references/agents/skill-pairing.md`](references/agents/skill-pairing.md) for examples and multi-agent coordination rules.
 
 ## Model Selection Guide
 
@@ -126,94 +80,9 @@ Choose the model based on the agent's primary workload. Document the choice in t
 
 - Always state the **Recommended** model, the **Minimum** model, and a one-line **Rationale**.
 - If a task requires extended context (e.g., reviewing an entire codebase), prefer models with larger context windows and note the requirement.
+## Reference Files
 
-## Token Budget Management
-
-Agents operate within finite context windows. Follow these rules to stay within budget:
-
-- **Scope inputs narrowly.** Request only the files, diffs, or artifacts the agent needs — not the entire repository.
-- **Summarize large inputs.** If an input exceeds 30 % of the model's context window, summarize or chunk it before passing it to the agent.
-- **Structured output only.** Agents must return structured, concise output (Markdown tables, checklists, code blocks). Avoid prose-heavy responses.
-- **Chunked workflows.** For large audits or reviews, split the work into file-group batches and process sequentially rather than loading everything at once.
-- **Reference, don't inline.** When citing templates or checklists, reference the file path (`skills/security/owasp-checklist.md`) rather than inlining the full content.
-
-## Testing and Validation
-
-Before merging a new or modified agent, verify the following:
-
-1. **Frontmatter valid** — YAML parses without errors. `name` matches filename. `description` is a single sentence. `tools` is a valid array. `allowed_skills`, if present, is a YAML array (may be empty).
-2. **All required sections present** — Walk the Required Sections Checklist above. Every section exists and is non-empty.
-3. **Skill references resolve** — Every template or checklist path referenced in the agent file exists on disk. Every skill name in `allowed_skills` must correspond to a directory under `skills/`.
-4. **Issue filing template works** — Copy the `gh issue create` block, substitute sample values, and confirm it produces a valid command.
-5. **Workflow is executable** — Each numbered step is actionable and unambiguous. A different person (or agent) should be able to follow the workflow without external context.
-6. **Model section complete** — Recommended model, minimum model, and rationale are all present. The recommended model identifier must match a known platform model.
-7. **No orphaned agents** — If the agent replaces or deprecates an existing agent, the old file is removed and any references are updated.
-8. **Dry-run the agent** — Execute the agent against a representative input and confirm it produces output matching the Output Format section.
-9. **Skill isolation check** — If `allowed_skills: []`, confirm the agent's workflow does not invoke any skills. If `allowed_skills` is a non-empty list, confirm all referenced skills are included.
-
-## Versioning and Deprecation
-
-- Agent files are versioned through Git history. There is no in-file version number.
-- **Breaking changes** (renamed fields, removed sections, changed workflow steps) require a changelog entry and a notice in the PR description.
-- **Deprecating an agent:** Add a `> [!WARNING] This agent is deprecated. Use <replacement-agent> instead.` callout at the top of the file, below the frontmatter. Keep the file for two sprints, then delete it.
-- **Renaming an agent:** Create the new file, deprecate the old file, and update all cross-references (instructions, other agents, skill directories) in the same PR.
-- When deleting an agent, also delete its paired skill directory if no other agent references those skills.
-
-## Example: Well-Structured Agent
-
-Below is a minimal but complete agent skeleton that satisfies all requirements:
-
-```markdown
----
-name: example-agent
-description: "Example agent for demonstrating structure. Use when creating a new agent from scratch."
-tools: [read_file, write_file, list_dir, run_terminal_command, create_github_issue]
-allowed_skills: [example-skill]
----
-
-# Example Agent
-
-Purpose: demonstrate the required structure and conventions for a basecoat agent.
-
-## Inputs
-
-- Feature description or user story
-- Relevant existing files or documentation
-
-## Workflow
-
-1. **Gather context** — read the inputs and identify the scope of work.
-2. **Execute the task** — perform the domain-specific work.
-3. **Validate output** — confirm the result meets acceptance criteria.
-4. **File issues** — create GitHub Issues for any discovered problems.
-
-## Domain Standards
-
-- Domain-specific rules, checklists, or reference tables go here.
-
-## GitHub Issue Filing
-
-File a GitHub Issue immediately when problems are discovered.
-
-| Finding | Labels |
+| File | Contents |
 |---|---|
-| Discovered defect or debt | `tech-debt,example` |
-
-## Model
-
-**Recommended:** gpt-5.3-codex
-**Rationale:** Code-optimized model suitable for implementation tasks.
-**Minimum:** gpt-5.4-mini
-
-## Output Format
-
-- Deliver code or artifacts with inline comments.
-- Reference filed issue numbers in output.
-- Provide a summary of work completed and issues filed.
-
-## Allowed Skills
-
-*(none)*
-```
-
-Use this skeleton as a starting point. Expand the Domain Standards section to match the agent's area of expertise. Refer to `agents/backend-dev.agent.md` and `agents/security-analyst.agent.md` for examples of fully fleshed-out agents.
+| [eferences/agents/skill-pairing.md](references/agents/skill-pairing.md) | Allowed Skills section format, agent-to-skill pairing, multi-agent coordination, token budget rules |
+| [eferences/agents/lifecycle.md](references/agents/lifecycle.md) | Validation checklist, versioning, deprecation, minimal agent skeleton |

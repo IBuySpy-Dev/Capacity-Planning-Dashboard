@@ -1,15 +1,16 @@
 ---
 description: "L2 memory index. Loads at session start to prime fast pattern recall. Maps trigger contexts to known high-confidence patterns and subject tags for deeper retrieval. Keep under 500 tokens — index only, no full memories."
 applyTo: "**/*"
+distribute: false
 ---
 
 # Memory Index — L2 Hot Cache
 
-> **For forks of BaseCoat:** This file ships with BaseCoat's own patterns as a reference implementation. Replace the Trigger Map and Pattern Bundle Catalog with your team's patterns. The Memory Hierarchy and Promotion Ladder sections are framework guidance — keep those. Your accumulated memories (SQLite store, session state) are yours alone and are git-ignored — they never travel upstream.
+> **For forks of BaseCoat:** Replace the Trigger Map and Pattern Bundle Catalog with your team's patterns. Keep Memory Hierarchy and routing sections — they are framework guidance. Accumulated memories (SQLite store, session state) are git-ignored and never travel upstream.
 
-This file is the L2 tier of the BaseCoat memory hierarchy. It loads automatically to prime fast recall before any task starts. It contains trigger-to-subject mappings and the highest-confidence patterns that recur across sprints.
+This file is the L2 tier of the BaseCoat memory hierarchy. It loads at session start to prime fast recall before any task begins.
 
-**Rule:** Do not inline full memories here. List the pattern in one line and the subject tag. Full retrieval goes to L3/L4.
+**Rule:** Do not inline full memories here. One line per pattern + subject tag. Full retrieval goes to L3/L4.
 
 ## Memory Hierarchy
 
@@ -23,33 +24,19 @@ This file is the L2 tier of the BaseCoat memory hierarchy. It loads automaticall
 | L3s | Shared Deep | `memories/{domain}/*.md` from shared repo (cached) | On demand, per domain |
 | L4 | Semantic | `store_memory` recall + `docs/` reference | 1–2 tool calls, load on demand |
 
-**Shared memory** (`L2s`/`L3s`) requires `BASECOAT_SHARED_MEMORY_REPO` to be set and `pwsh scripts/sync-shared-memory.ps1` to have been run. Memories are cached locally with a 24-hour TTL and are git-ignored — they never travel with the repo. See `docs/shared-memory.md`.
+### Promotion Ladder (Summary)
 
-### Promotion Ladder
+Patterns promote through heat score — move up when `heat ≥ threshold` sustained across sessions; demote when heat drops below floor after inactivity. Mark pinned patterns `[pin]` to exempt from decay.
 
-Patterns move up through use; stale patterns move down.
+See [`references/memory-index/memory-algorithms.md`](references/memory-index/memory-algorithms.md) for full formulas.
 
-```
-L4 store_memory accessed 3+ times across sessions → promote to L2 index entry
-L2 entry applied 5+ times → extract to L1 instruction file rule
-L1 rule applied in >50% of sessions → consider L0 (agent frontmatter)
-L1 rule not applied in 90 days → demote back to L2 or prune
-L2 entry not referenced in 60 days → demote to L4 or prune
-```
+## Intent Classification — TRM Two-Pass Routing
 
-**Pinned patterns** (security, governance, hard constraints) are exempt from decay. Mark with `[pin]`.
+1. **Pass 1:** Match against L2 trigger map; compute initial confidence
+2. **Evaluate:** confidence ≥ 0.80 or ≤ 0.30 → converge immediately (skip Pass 2)
+3. **Pass 2:** For scores 0.30–0.79, retrieve a targeted L3 snippet (last N=3 turns on topic) and reclassify
 
-## Execution Path Routing
-
-Before loading any context, classify intent and route:
-
-```
-confidence ≥ 0.80 → FAST PATH: load pattern bundle, skip exploration
-confidence 0.50–0.79 → bundle as starting point + run Explore phase  
-confidence < 0.50 → FULL PATH: layered context load, estimate N turns
-```
-
-Guardrails (Layer 1) fire at fixed checkpoints regardless of path. See `docs/execution-hierarchy.md`.
+Max confidence boost from Pass 2: **+0.15**. For EscalationQuery contract and GuidanceSignal types, see [`references/memory-index/memory-algorithms.md`](references/memory-index/memory-algorithms.md).
 
 ## Pattern Bundles — Fast Path Catalog
 
@@ -64,6 +51,9 @@ Guardrails (Layer 1) fire at fixed checkpoints regardless of path. See `docs/exe
 | `release` | release, version bump, tag, CHANGELOG | 4 | 0.87 |
 | `clean-branches` | clean branches, stale branches, delete merged | 2 | 0.95 |
 | `portal-feature` | portal, component, hook, frontend | 5 | 0.80 |
+| `contribute-memory` | contribute memory, export memory, push to memory repo, sprint end | 2 | 0.90 |
+
+Confidence is updated using Bayesian incremental learning after each outcome. Security/governance bundles marked `[pin]` are exempt from decay. See [`references/memory-index/memory-algorithms.md`](references/memory-index/memory-algorithms.md) for the update formula.
 
 ### CI / GitHub Actions
 
@@ -112,31 +102,36 @@ Guardrails (Layer 1) fire at fixed checkpoints regardless of path. See `docs/exe
 | Stuck after 5 turns | `store_memory` failure pattern, change approach, do not escalate model tier first | `failure-protocol` [pin] |
 | Task succeeds with novel solution | `store_memory` if non-obvious pattern + tests pass; skip for boilerplate | `success-protocol` |
 
-## Episodic Retrieval Shortcuts (L3)
+## HRM Tier Resolution Order
 
-Use these queries when you need prior session context:
+Resolve memory tier by tier — do not skip layers or query deeper tiers before shallower ones:
 
-```sql
--- Recent sessions on a topic
-SELECT id, summary, created_at FROM sessions
-WHERE summary ILIKE '%<topic>%'
-ORDER BY created_at DESC LIMIT 5
+| Tier | Resolves | Escalates when |
+|------|---------|----------------|
+| L0/L1 | Always-on rules; glob-scoped instructions | Out-of-scope for the glob or hard rule |
+| L2 | Pattern bundle match, confidence ≥ 0.80 | Confidence < 0.80 after TRM Pass 2 |
+| L3 | Prior session coverage of the task | No matching session found |
+| L4 | Long-term fact or architecture guidance | No coverage → generate and store |
 
--- Prior failures on a pattern
-SELECT t.user_message, t.assistant_response FROM turns t
-JOIN sessions s ON t.session_id = s.id
-WHERE s.created_at > now() - INTERVAL '30 days'
-  AND t.user_message ILIKE '%<keyword>%'
-LIMIT 10
-```
+## Memory Scope Checklist
 
-## Maintenance Rules
+Before calling `store_memory`, validate all four:
 
-Update this file when:
-- `store_memory` has been called for the same subject 3+ times (promote to index)
-- A gotcha has burned >2 turns in multiple sessions
-- A pattern recurs across 2+ sprints
+1. **Repo-scoped** — Applies to this repo's conventions, not a customer/sub-project
+2. **Generic** — Useful to any BaseCoat team, not one company's specific setup
+3. **Durable** — Will still be true in 3+ sprints
+4. **Actionable** — Changes what an agent does next
 
-Remove an entry when:
-- The pattern is now fully covered by an L1 instruction file
-- The pattern hasn't applied in 2+ sprints (demote to L4 or prune)
+If any answer is "no", skip `store_memory`. Document in `docs/` or keep as session note.
+
+For sharing across sessions/users: see `docs/memory/PROCESS.md` — contribute to `basecoat-memory`.
+
+## References
+
+| Topic | File |
+|---|---|
+| Promotion ladder formula, TRM confidence math, EscalationQuery contract, confidence update formula | [`references/memory-index/memory-algorithms.md`](references/memory-index/memory-algorithms.md) |
+| Full HRM layer definitions, GuidanceSignal types | `instructions/hrm-execution.instructions.md` |
+| Reflexion failure signal format, two-pass classification | `instructions/trm-reflexion.instructions.md` |
+| TRM estimator rationale and threshold calibration | `docs/research/TRM-HRM-investigation.md` |
+| End-to-end memory contribution pipeline, scope policy, steward guide | [`docs/memory/PROCESS.md`](../docs/memory/PROCESS.md) |

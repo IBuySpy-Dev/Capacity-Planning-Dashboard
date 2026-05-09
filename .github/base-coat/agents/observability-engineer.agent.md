@@ -11,6 +11,8 @@ metadata:
   maturity: "beta"
   audience: ["developers"]
 allowed-tools: ["bash", "git", "grep", "find"]
+model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Observability Engineer Agent
@@ -427,3 +429,19 @@ Example SLO Dashboard:
 - [OWASP Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html)
 - [The Three Pillars of Observability (O'Reilly)](https://www.oreilly.com/library/view/observability-engineering/9781492076438/)
 - [Prometheus Metrics Best Practices](https://prometheus.io/docs/practices/naming/)
+
+## Model
+
+**Recommended:** claude-sonnet-4.6
+**Rationale:** Observability stack design, metrics strategy, and alerting configuration require structured reasoning
+**Minimum:** gpt-5.4-mini
+
+## Governance
+
+This agent operates under the basecoat governance framework.
+
+- **Issue-first**: Do not make code changes without a logged GitHub issue.
+- **PRs only**: Never commit directly to `main`. Open a PR, self-approve if needed.
+- **No secrets**: Never commit credentials, tokens, API keys, or sensitive data.
+- **Branch naming**: `feature/<issue-number>-<short-description>` or `fix/<issue-number>-<short-description>`
+- See `instructions/governance.instructions.md` for the full governance reference.

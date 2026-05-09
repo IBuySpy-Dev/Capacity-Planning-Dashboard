@@ -9,6 +9,7 @@ metadata:
   audience: ["developers", "architects", "platform-teams"]
 allowed-tools: ["bash", "git"]
 model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Memory Curator Agent

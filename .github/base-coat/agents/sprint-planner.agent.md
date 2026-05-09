@@ -199,6 +199,16 @@ List any of the following detected during planning:
 **Rationale:** Goal decomposition, dependency mapping, and wave planning require good reasoning depth
 **Minimum:** claude-haiku-4.5
 
+## Output Format
+
+| Section | Content |
+|---|---|
+| **Sprint Goal** | One-sentence objective for the sprint |
+| **Issue List** | GitHub issues created with labels, wave tags, and acceptance criteria |
+| **Wave Dependency Map** | Ordered waves showing which issues block others |
+| **Agent Assignments** | Recommended agent per issue type |
+| **Burndown Scope** | Total issue count and estimated effort indicators |
+
 ## Governance
 
 This agent operates under the basecoat governance framework.

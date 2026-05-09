@@ -11,6 +11,8 @@ metadata:
   maturity: "beta"
   audience: ["developers"]
 allowed-tools: ["bash", "git", "grep", "find"]
+model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Hardening Advisor Agent
@@ -400,3 +402,19 @@ systemctl status apparmor  # Should be active
 - [DISA STIGs](https://stigwiki.michener.edu/)
 - [NIST SP 800-190 — Container Security](https://doi.org/10.6028/NIST.SP.800-190)
 - [CIS Controls v8](https://www.cisecurity.org/controls)
+
+## Model
+
+**Recommended:** claude-sonnet-4.6
+**Rationale:** Security hardening assessment and remediation prioritization require structured reasoning
+**Minimum:** gpt-5.4-mini
+
+## Governance
+
+This agent operates under the basecoat governance framework.
+
+- **Issue-first**: Do not make code changes without a logged GitHub issue.
+- **PRs only**: Never commit directly to `main`. Open a PR, self-approve if needed.
+- **No secrets**: Never commit credentials, tokens, API keys, or sensitive data.
+- **Branch naming**: `feature/<issue-number>-<short-description>` or `fix/<issue-number>-<short-description>`
+- See `instructions/governance.instructions.md` for the full governance reference.

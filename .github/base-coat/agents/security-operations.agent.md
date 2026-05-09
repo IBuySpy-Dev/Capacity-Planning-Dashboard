@@ -23,6 +23,8 @@ metadata:
   tags: ["uncategorized"]
   maturity: "beta"
   audience: ["developers"]
+model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Security Operations Agent
@@ -202,3 +204,18 @@ if source_ip in threat_intelligence.blocked_ips:
 - **Audit Log Compliance Evidence** — log coverage report mapped to applicable compliance controls
 - **Post-Incident Runbook Updates** — revised playbooks incorporating lessons learned from the incident
 
+## Model
+
+**Recommended:** claude-sonnet-4.6
+**Rationale:** SOC playbook guidance, incident response coordination, and threat detection require structured reasoning
+**Minimum:** gpt-5.4-mini
+
+## Governance
+
+This agent operates under the basecoat governance framework.
+
+- **Issue-first**: Do not make code changes without a logged GitHub issue.
+- **PRs only**: Never commit directly to `main`. Open a PR, self-approve if needed.
+- **No secrets**: Never commit credentials, tokens, API keys, or sensitive data.
+- **Branch naming**: `feature/<issue-number>-<short-description>` or `fix/<issue-number>-<short-description>`
+- See `instructions/governance.instructions.md` for the full governance reference.

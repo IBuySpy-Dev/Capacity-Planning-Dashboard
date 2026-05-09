@@ -9,6 +9,7 @@ metadata:
   audience: ["backend-developers", "platform-teams", "architects"]
 allowed-tools: ["bash", "git", "grep", "find", "terraform", "sql"]
 model: gpt-5.3-codex
+allowed_skills: []
 ---
 
 # Backend Development Agent

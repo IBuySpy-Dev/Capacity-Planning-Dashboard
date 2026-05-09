@@ -8,6 +8,8 @@ metadata:
   maturity: "production"
   audience: ["qa-engineers", "developers", "test-automation-engineers"]
 allowed-tools: ["bash", "git", "python", "docker"]
+model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # E2E Test Strategy Agent
@@ -372,3 +374,19 @@ test('checkout interaction meets Core Web Vitals targets', async ({ page }) => {
 - `skills/e2e-testing/`: Playwright patterns, test data fixtures, CI/CD templates
 - `instructions/testing.instructions.md`: General test standards (applies to E2E too)
 - `instructions/quality.instructions.md`: Quality standards and testing expectations
+
+## Model
+
+**Recommended:** claude-sonnet-4.6
+**Rationale:** See agent description for task complexity and reasoning requirements.
+**Minimum:** gpt-5.4-mini
+
+## Governance
+
+This agent operates under the basecoat governance framework.
+
+- **Issue-first**: Do not make code changes without a logged GitHub issue.
+- **PRs only**: Never commit directly to `main`. Open a PR, self-approve if needed.
+- **No secrets**: Never commit credentials, tokens, API keys, or sensitive data.
+- **Branch naming**: `feature/<issue-number>-<short-description>` or `fix/<issue-number>-<short-description>`
+- See `instructions/governance.instructions.md` for the full governance reference.

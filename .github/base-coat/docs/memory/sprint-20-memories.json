@@ -1,0 +1,66 @@
+[
+  {
+    "subject": "ci:copilot-agent-pr",
+    "fact": "Copilot agent PRs show action_required (0 jobs). A maintainer must push an empty commit to trigger CI review.",
+    "confidence": 0.95,
+    "citations": "IBuySpy-Shared/basecoat — PRs #312, #313, #314",
+    "category": "convention",
+    "applies_to": "all teams"
+  },
+  {
+    "subject": "git:squash-branch-cleanup",
+    "fact": "Squash-merged branches do not appear in --merged output. Use 'gh pr list --state all --head <branch>' to verify before deleting.",
+    "confidence": 0.92,
+    "citations": "IBuySpy-Shared/basecoat — sprint branch cleanup process",
+    "category": "convention",
+    "applies_to": "all teams"
+  },
+  {
+    "subject": "authoring:agent-required-sections",
+    "fact": "Agent files must contain ## Inputs, ## Workflow (or ## Process), and an output section (## Output, ## Expected Output, ## Report, or ## Results). Validated by test suite.",
+    "confidence": 0.98,
+    "citations": "IBuySpy-Shared/basecoat tests/agent-integration-tests.ps1:200-226",
+    "category": "convention",
+    "applies_to": "all teams"
+  },
+  {
+    "subject": "authoring:skill-conventions",
+    "fact": "Skill directories require SKILL.md with 'name' and 'description' frontmatter. Values in 'allowed_skills' must exactly match the skill directory name.",
+    "confidence": 0.98,
+    "citations": "IBuySpy-Shared/basecoat tests/agent-integration-tests.ps1:167-196",
+    "category": "convention",
+    "applies_to": "all teams"
+  },
+  {
+    "subject": "process:sprint-worktree",
+    "fact": "Sprint branches use separate git worktrees. Check with 'git worktree list' before creating a new sprint branch.",
+    "confidence": 0.88,
+    "citations": "IBuySpy-Shared/basecoat sprint 16-20 workflow",
+    "category": "convention",
+    "applies_to": "all teams"
+  },
+  {
+    "subject": "process:task-classification",
+    "fact": "Classify tasks before starting: Routine (≤3 turns), Familiar (≤5 turns), Novel (estimate N). Log failure pattern after 5 turns with no progress.",
+    "confidence": 0.90,
+    "citations": "IBuySpy-Shared/basecoat instructions/token-economics.instructions.md",
+    "category": "convention",
+    "applies_to": "all teams"
+  },
+  {
+    "subject": "memory:scope-policy",
+    "fact": "Before store_memory, validate: repo-scoped (not project-specific), generic (useful to any BaseCoat team), durable (true in 3+ sprints), actionable (changes agent behavior). All four must be yes.",
+    "confidence": 0.90,
+    "citations": "IBuySpy-Shared/basecoat instructions/memory-index.instructions.md",
+    "category": "convention",
+    "applies_to": "all teams"
+  },
+  {
+    "subject": "ci:markdown-lint-md031",
+    "fact": "Fenced code blocks need blank lines before and after (MD031) and a language specifier (MD040). Commonly breaks after rebases on governance.instructions.md.",
+    "confidence": 0.93,
+    "citations": "IBuySpy-Shared/basecoat — recurring lint failures across sprints 17-20",
+    "category": "convention",
+    "applies_to": "all teams"
+  }
+]

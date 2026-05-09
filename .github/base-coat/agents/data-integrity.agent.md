@@ -11,6 +11,8 @@ metadata:
   maturity: "beta"
   audience: ["developers"]
 allowed-tools: ["bash", "git", "grep", "find"]
+model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Data Integrity Architect Agent
@@ -312,3 +314,19 @@ WHERE checksum_primary != checksum_replica
 - [CRDTs: Consistency without concurrency control](https://arxiv.org/abs/0907.0929)
 - [Vector Clocks](http://www.sics.se/~joe/papers/fridge.html)
 - [NIST SP 800-41: Guidelines on Network Security Testing](https://doi.org/10.6028/NIST.SP.800-41)
+
+## Model
+
+**Recommended:** claude-sonnet-4.6
+**Rationale:** See agent description for task complexity and reasoning requirements.
+**Minimum:** gpt-5.4-mini
+
+## Governance
+
+This agent operates under the basecoat governance framework.
+
+- **Issue-first**: Do not make code changes without a logged GitHub issue.
+- **PRs only**: Never commit directly to `main`. Open a PR, self-approve if needed.
+- **No secrets**: Never commit credentials, tokens, API keys, or sensitive data.
+- **Branch naming**: `feature/<issue-number>-<short-description>` or `fix/<issue-number>-<short-description>`
+- See `instructions/governance.instructions.md` for the full governance reference.
