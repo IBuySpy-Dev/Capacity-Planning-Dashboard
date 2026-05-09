@@ -1929,8 +1929,28 @@ async function ensureDatabasePrincipalAccess(pool, principalName, roles = []) {
   return normalizedRoles;
 }
 
-app.get('/healthz', (_, res) => {
-  res.json({ status: 'ok', service: 'capacity-dashboard-api' });
+app.get('/healthz', async (_, res) => {
+  const checks = {};
+  let httpStatus = 200;
+
+  // DB connectivity check — SELECT 1 with a short request timeout
+  try {
+    const pool = await getSqlPool();
+    if (!pool) {
+      checks.db = { status: 'unconfigured' };
+    } else {
+      const req = pool.request();
+      req.timeout = 3000; // ms — fail fast so the probe doesn't block App Service health check
+      await req.query('SELECT 1 AS ping');
+      checks.db = { status: 'ok' };
+    }
+  } catch (err) {
+    checks.db = { status: 'error', message: err.message };
+    httpStatus = 503;
+  }
+
+  const overall = httpStatus === 200 ? 'ok' : 'degraded';
+  res.status(httpStatus).json({ status: overall, service: 'capacity-dashboard-api', checks });
 });
 
 app.get('/api/auth/me', (req, res) => {
