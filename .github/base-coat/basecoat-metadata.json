@@ -35,7 +35,8 @@
         "config-auditor",
         "manual-test-strategy",
         "exploratory-charter",
-        "strategy-to-automation"
+        "strategy-to-automation",
+        "repo-health-auditor"
       ]
     },
     "DevOps": {
@@ -628,6 +629,31 @@
       "file": "agents/merge-coordinator.agent.md",
       "model": "GPT-4o-mini / Claude Haiku",
       "argumentHint": "/basecoat merge coordinate merging 3 feature branches into main"
+    },
+    {
+      "name": "repo-health-auditor",
+      "description": "Audits a GitHub repository across six dimensions — CI stability, security posture, dependency hygiene, test coverage, governance completeness, and issue/PR hygiene. Produces a scored traffic-light report with prioritized remediation actions.",
+      "category": "Quality",
+      "keywords": [
+        "audit",
+        "health",
+        "repo-health",
+        "ci",
+        "security",
+        "dependencies",
+        "governance",
+        "tech-debt",
+        "repo-audit"
+      ],
+      "aliases": [
+        "health",
+        "audit",
+        "repo-audit"
+      ],
+      "pairedSkill": "repo-health",
+      "file": "agents/repo-health-auditor.agent.md",
+      "model": "Claude Haiku 4.5",
+      "argumentHint": "/basecoat health audit OWNER/REPO"
     }
   ]
 }
