@@ -35,7 +35,8 @@ const ingestStatus = {
   lastError: null,
   lastInsertedRows: 0,
   lastDurationMs: 0,
-  lastSummary: null
+  lastSummary: null,
+  lastRegionErrors: []
 };
 
 function normalize(value) {
@@ -504,6 +505,7 @@ async function runCapacityIngestion(options = {}) {
   ingestStatus.inProgress = true;
   ingestStatus.lastRunUtc = new Date().toISOString();
   ingestStatus.lastError = null;
+  ingestStatus.lastRegionErrors = [];
 
   try {
     const credential = getCredential();
@@ -517,6 +519,7 @@ async function runCapacityIngestion(options = {}) {
     const familyFilters = getFamilyFilters(options.familyFilters);
     const capturedAtUtc = new Date();
     const rows = [];
+    const regionErrors = [];
     const pricingEnabled = String(process.env.INGEST_ENABLE_PRICING || 'true').toLowerCase() !== 'false';
     const pricingCache = new Map();
     
@@ -548,10 +551,11 @@ async function runCapacityIngestion(options = {}) {
           const usageUrl = `${ARM_BASE}/subscriptions/${subscriptionId}/providers/Microsoft.Compute/locations/${region}/usages?api-version=2024-03-01`;
           const skusUrl = `${ARM_BASE}/subscriptions/${subscriptionId}/providers/Microsoft.Compute/skus?$filter=${encodeURIComponent(`location eq '${region}'`)}&api-version=2024-03-01`;
 
-          const [usages, skus] = await Promise.all([
-            armGetAll(usageUrl, token),
-            armGetAll(skusUrl, token)
-          ]);
+          try {
+            const [usages, skus] = await Promise.all([
+              armGetAll(usageUrl, token),
+              armGetAll(skusUrl, token)
+            ]);
 
           const catalogRows = [];
           for (const sku of skus) {
@@ -607,6 +611,12 @@ async function runCapacityIngestion(options = {}) {
           }
 
           return localRows;
+          } catch (err) {
+            const errMsg = err?.message || String(err);
+            console.warn(`[ingest] region ${region} (sub ${subscriptionId}) failed: ${errMsg}`);
+            regionErrors.push({ subscriptionId, region, error: errMsg });
+            return [];
+          }
         });
 
         rows.push(...regionRows.flat());
@@ -614,20 +624,25 @@ async function runCapacityIngestion(options = {}) {
         // Ingest verified AI quota rows only when both the App Service flag and DB safety gate resolve on.
         if (aiSettings.aiEnabled) {
           const aiRegionRows = await mapWithConcurrency(regions, regionConcurrency, async (region) => {
-            const aiUsages = await fetchAIUsages(armGetAll, token, subscriptionId, region, {
-              includeAllProviders: aiSettings.providerQuotaEnabled
-            });
-            const localAiRows = aiUsages
-              .map((usage) => mapAIUsageToSnapshot(usage, {
-                capturedAtUtc,
-                subscriptionKey,
-                subscriptionId,
-                subscriptionName,
-                region
-              }))
-              .filter(Boolean);
-             
-            return localAiRows;
+            try {
+              const aiUsages = await fetchAIUsages(armGetAll, token, subscriptionId, region, {
+                includeAllProviders: aiSettings.providerQuotaEnabled
+              });
+              return aiUsages
+                .map((usage) => mapAIUsageToSnapshot(usage, {
+                  capturedAtUtc,
+                  subscriptionKey,
+                  subscriptionId,
+                  subscriptionName,
+                  region
+                }))
+                .filter(Boolean);
+            } catch (err) {
+              const errMsg = err?.message || String(err);
+              console.warn(`[ingest] AI region ${region} (sub ${subscriptionId}) failed: ${errMsg}`);
+              regionErrors.push({ subscriptionId, region, error: errMsg, scope: 'ai' });
+              return [];
+            }
           });
           
           aiRows.push(...aiRegionRows.flat());
@@ -681,6 +696,7 @@ async function runCapacityIngestion(options = {}) {
     ingestStatus.lastSuccessUtc = new Date().toISOString();
     ingestStatus.lastDurationMs = durationMs;
     ingestStatus.lastInsertedRows = insertedRows;
+    ingestStatus.lastRegionErrors = regionErrors;
     ingestStatus.lastSummary = {
       subscriptionCount: subscriptions.length,
       subscriptionKeys: [...new Set(allRows.map((r) => r.subscriptionKey))],
@@ -690,7 +706,8 @@ async function runCapacityIngestion(options = {}) {
       insertedScoreRows,
       insertedAIRows: aiRows.length,
       aiQuotaScope: aiSettings.providerQuotaEnabled ? 'provider-aware' : 'openai-only',
-      insertedAIModelRows
+      insertedAIModelRows,
+      regionErrorCount: regionErrors.length
     };
 
     return ingestStatus.lastSummary;

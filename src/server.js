@@ -2324,7 +2324,8 @@ app.get('/api/admin/config', requireAdmin, async (_req, res) => {
           lastRunStatus,
           lastRunRecords: s.lastSuccessUtc ? s.lastInsertedRows : null,
           lastErrorMessage: s.lastError || null,
-          inProgress: s.inProgress
+          inProgress: s.inProgress,
+          regionErrorCount: (s.lastRegionErrors || []).length
         };
       })()
     }
