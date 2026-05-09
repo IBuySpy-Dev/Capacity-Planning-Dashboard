@@ -186,6 +186,23 @@ try {
 $ClientId = $sp.clientId
 $TenantId = $sp.tenantId
 
+# Grant User Access Administrator at subscription scope so the SP can create
+# subscription-scoped role assignments during Bicep deployment (Reader, GroupQuota
+# Request Operator, worker RBAC modules all target subscription() scope).
+Write-Section "Granting User Access Administrator at subscription scope..."
+try {
+    az role assignment create `
+        --assignee $ClientId `
+        --role "User Access Administrator" `
+        --scope "/subscriptions/$SubscriptionId" `
+        --output none
+    Write-Success "User Access Administrator granted at subscription scope"
+} catch {
+    Write-Warning "Could not assign User Access Administrator: $_"
+    Write-Info "This role is required for Bicep to create subscription-scoped role assignments."
+    Write-Info "Assign it manually: az role assignment create --assignee $ClientId --role 'User Access Administrator' --scope /subscriptions/$SubscriptionId"
+}
+
 # ============================================================================
 # STEP 3: CONFIGURE GITHUB FEDERATED CREDENTIALS
 # ============================================================================

@@ -46,6 +46,21 @@ BEGIN
     PRINT '[' + '{APP_SERVICE_NAME}' + '] already has db_datawriter role';
 END
 
+-- Grant DDL admin role (CREATE/ALTER TABLE for schema initialization at startup)
+IF NOT EXISTS (
+    SELECT * FROM sys.database_role_members
+    WHERE role_principal_id = (SELECT principal_id FROM sys.database_principals WHERE name = 'db_ddladmin')
+    AND member_principal_id = (SELECT principal_id FROM sys.database_principals WHERE name = '{APP_SERVICE_NAME}')
+)
+BEGIN
+    ALTER ROLE db_ddladmin ADD MEMBER [{APP_SERVICE_NAME}];
+    PRINT 'Added [' + '{APP_SERVICE_NAME}' + '] to db_ddladmin role';
+END
+ELSE
+BEGIN
+    PRINT '[' + '{APP_SERVICE_NAME}' + '] already has db_ddladmin role';
+END
+
 -- Verify permissions were applied
 SELECT 
     'Database Setup Complete' as [Status],
