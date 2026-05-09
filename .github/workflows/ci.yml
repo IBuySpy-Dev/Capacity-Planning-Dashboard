@@ -1,15 +1,20 @@
 # CI Workflow — Pull Request Validation
 #
-# Triggers on every pull request targeting main.
+# Triggers on every pull request targeting main and pushes to main.
 # Validates code by installing dependencies and running the full test suite.
-# No Azure credentials required — this is a read-only validation job.
+# A second job (integration-test) spins up a SQL Server container, starts
+# the app, and confirms DB connectivity via /api/admin/config — catching
+# schema-gap regressions before they reach production.
 #
-# Required secrets / variables: none
+# Required secrets / variables: none (unit tests only)
+# Required secrets for integration-test job: none (uses ephemeral SA password)
 
 name: CI
 
 on:
   pull_request:
+    branches: [ main ]
+  push:
     branches: [ main ]
 
 # Minimum permissions — no id-token because no cloud access is needed here.
@@ -19,7 +24,7 @@ permissions:
 # Cancel in-progress CI runs for the same PR branch when a new push arrives.
 # This is safe for CI (no side effects) and avoids wasting runner minutes.
 concurrency:
-  group: ci-${{ github.head_ref }}
+  group: ci-${{ github.head_ref || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -44,3 +49,92 @@ jobs:
         # Uses the built-in Node.js test runner (node --test).
         # No separate build step — this is a pure JS project.
         run: npm test
+
+  integration-test:
+    name: Integration Test (DB connectivity)
+    runs-on: ubuntu-latest
+    # Only run on pull_request and push to main — not on tag-only pushes.
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          # Test-only SA password — never used outside CI, not a secret.
+          MSSQL_SA_PASSWORD: CiTestPa$$w0rd!
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'CiTestPa$$w0rd!' -C -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start app against test SQL Server
+        env:
+          PORT: 3001
+          NODE_ENV: test
+          AUTH_ENABLED: "false"
+          SESSION_SECRET: ci-test-session-secret
+          SQL_SERVER: localhost
+          SQL_DATABASE: master
+          SQL_USER: sa
+          SQL_PASSWORD: CiTestPa$$w0rd!
+          SQL_AUTH_MODE: sql
+          SQL_TRUST_SERVER_CERTIFICATE: "true"
+        run: |
+          node src/server.js &
+          echo "APP_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Wait for app to be ready
+        run: |
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:3001/healthz > /dev/null 2>&1; then
+              echo "✅ App is ready (attempt $i)"
+              exit 0
+            fi
+            echo "  waiting… (attempt $i/20)"
+            sleep 2
+          done
+          echo "❌ App did not become ready after 40s"
+          exit 1
+
+      - name: Confirm /healthz returns 200
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/healthz)
+          echo "GET /healthz → HTTP $STATUS"
+          test "$STATUS" -eq 200
+
+      - name: Confirm DB connectivity via /api/admin/config
+        run: |
+          BODY=$(curl -sf http://localhost:3001/api/admin/config)
+          echo "$BODY" | jq .
+          POOL_READY=$(echo "$BODY" | jq -r '.config.sql.poolReady')
+          echo "sql.poolReady = $POOL_READY"
+          if [ "$POOL_READY" != "true" ]; then
+            echo "❌ DB connectivity check failed: sql.poolReady is not true"
+            exit 1
+          fi
+          echo "✅ DB connectivity confirmed"
+
+      - name: Stop app
+        if: always()
+        run: |
+          if [ -n "$APP_PID" ]; then
+            kill "$APP_PID" || true
+          fi
+

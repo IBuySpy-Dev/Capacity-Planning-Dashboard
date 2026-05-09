@@ -28,7 +28,9 @@ function buildSqlConfig({ accessToken } = {}) {
     connectionTimeout: 30000,
     options: {
       encrypt: true,
-      trustServerCertificate: false
+      // Allow self-signed certs in CI/dev (e.g. Docker MSSQL) via env var.
+      // Never set this in production — always use a CA-signed cert.
+      trustServerCertificate: process.env.SQL_TRUST_SERVER_CERTIFICATE === 'true'
     },
     pool: {
       max: 10,
