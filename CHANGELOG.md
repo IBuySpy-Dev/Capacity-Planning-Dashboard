@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] — 2025-06-13
+
+### Added
+
+- **Env vars reference** (#49): `docs/ENVIRONMENT_VARIABLES.md` documents all required and optional environment variables with descriptions, defaults, and security notes.
+- **Docker Compose local dev** (#48): `docker-compose.yml` spins up SQL Server 2022 locally for development and integration testing without Azure dependencies.
+- **Ingestion status in `/api/admin/config`** (#50): New `ingestion` section in the admin diagnostics endpoint exposes `lastRunAt`, `lastRunStatus`, `lastRunRecords`, `lastErrorMessage`, `inProgress`, and `regionErrorCount` for operational visibility.
+- **Per-region ingestion isolation** (#51): Failed ARM/AI quota regions now return `[]` instead of aborting the entire ingestion run. `lastRegionErrors` and `regionErrorCount` track partial failures without blocking successful regions.
+- **App Insights structured telemetry** (#52): `src/services/telemetry.js` wraps Application Insights with no-op safety when `APPLICATIONINSIGHTS_CONNECTION_STRING` is absent. Ingestion runs emit `IngestionStarted`, `IngestionCompleted`, and `IngestionFailed` events.
+- **Dashboard loading/error UI states** (#53): Capacity grid and family summary now show distinct "Loading…" and "Error: …" states instead of blank rows on slow loads or API failures. Closes the support gap around the `/api/capacity/families` failure reference.
+- **Data staleness badge** (#54): Header shows "Last refreshed X minutes ago" (or "Never") using the `/api/admin/ingest/status` endpoint. Badge is hidden while fetching and for non-admin users (403 → graceful no-op).
+
+---
+
 ## [0.2.0] — 2026-05-09
 
 ### Added
