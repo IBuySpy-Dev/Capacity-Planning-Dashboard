@@ -186,6 +186,23 @@ try {
 $ClientId = $sp.clientId
 $TenantId = $sp.tenantId
 
+# Grant Contributor at subscription scope so the SP can create nested sub-deployments
+# at subscription scope from az deployment group create. Required when Bicep modules
+# use `scope: subscription()` (e.g. webSubscriptionReader, webSubscriptionQuotaWriter).
+Write-Section "Granting Contributor at subscription scope..."
+try {
+    az role assignment create `
+        --assignee $ClientId `
+        --role "Contributor" `
+        --scope "/subscriptions/$SubscriptionId" `
+        --output none
+    Write-Success "Contributor granted at subscription scope"
+} catch {
+    Write-Warning "Could not assign Contributor at subscription scope: $_"
+    Write-Info "Required for Bicep cross-scope module deployments (subscription() scope)."
+    Write-Info "Assign manually: az role assignment create --assignee $ClientId --role 'Contributor' --scope /subscriptions/$SubscriptionId"
+}
+
 # Grant User Access Administrator at subscription scope so the SP can create
 # subscription-scoped role assignments during Bicep deployment (Reader, GroupQuota
 # Request Operator, worker RBAC modules all target subscription() scope).
@@ -258,6 +275,30 @@ try {
     Write-Success "Federated credential created for pull requests"
 } catch {
     Write-Warning "Pull request federated credential already exists or failed"
+}
+
+# Create federated credential for GitHub environment deployments (environment: production)
+# The bicep-deploy.yml workflow uses `environment: production` which generates a distinct
+# subject claim: repo:{org}/{repo}:environment:{name}
+Write-Section "Creating federated credential for '$EnvironmentName' environment..."
+$SubjectIdentifierEnv = "repo:$($GitHubOrganization)/$($GitHubRepository):environment:$EnvironmentName"
+
+try {
+    $credentialEnv = @{
+        issuer   = $IssuerUrl
+        subject  = $SubjectIdentifierEnv
+        audience = "api://AzureADTokenExchange"
+    } | ConvertTo-Json
+
+    az ad app federated-credential create `
+        --id $ClientId `
+        --parameters "$credentialEnv" `
+        --display-name "github-$GitHubRepository-env-$EnvironmentName" `
+        | Out-Null
+
+    Write-Success "Federated credential created for environment '$EnvironmentName'"
+} catch {
+    Write-Warning "Environment federated credential already exists or failed: $_"
 }
 
 # ============================================================================
@@ -402,10 +443,12 @@ Write-Section "Summary"
 Write-Host ""
 Write-Host "✓ Service Principal Created" -ForegroundColor $COLORS.Success
 Write-Host "  ID: $ClientId"
+Write-Host "  Roles: Contributor (RG scope), Contributor + User Access Administrator (subscription scope)"
 Write-Host ""
 Write-Host "✓ GitHub Federated Credentials Configured" -ForegroundColor $COLORS.Success
 Write-Host "  - Main branch deployments"
 Write-Host "  - Pull request deployments"
+Write-Host "  - Environment: $EnvironmentName"
 Write-Host ""
 Write-Host "✓ GitHub Environment Variables Set" -ForegroundColor $COLORS.Success
 Write-Host "  Environment: $EnvironmentName"
