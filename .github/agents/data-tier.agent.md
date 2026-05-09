@@ -9,6 +9,7 @@ metadata:
   audience: ["backend-developers", "data-engineers", "architects"]
 allowed-tools: ["bash", "git", "grep", "sql"]
 model: gpt-5.3-codex
+allowed_skills: []
 ---
 
 # Data Tier Agent

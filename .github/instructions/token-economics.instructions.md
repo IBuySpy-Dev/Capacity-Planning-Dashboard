@@ -1,6 +1,7 @@
 ---
 description: "Use when selecting models, escalating reasoning cost, or loading context. Enforces cost-aware routing and token budget discipline for all agent work."
 applyTo: "**/*"
+distribute: false
 ---
 
 # Token Economics
@@ -19,10 +20,10 @@ Use this instruction whenever choosing a model, deciding how much context to loa
 
 ## Model Tier Guidance
 
-- **Premium** — Use for high-stakes, irreversible, or trust-without-second-opinion decisions such as architecture direction, security analysis, compliance interpretation, and major cross-system tradeoffs.
-- **Reasoning** — Use for analysis, code review, research, test strategy, planning, and other work that needs structured judgment but not the highest-cost tier.
-- **Code** — Use for implementation, refactoring, debugging, migration, and code generation tasks where code quality matters more than broad strategic reasoning.
-- **Fast** — Use for routine automation, scanning, formatting, status checks, simple transformations, and other well-defined tasks with clear inputs and easy validation.
+- **Premium** (`claude-opus-4.7`, `claude-opus-4.7-high`, `claude-opus-4.6`) — Use for high-stakes, irreversible, or trust-without-second-opinion decisions such as architecture direction, security analysis, compliance interpretation, and major cross-system tradeoffs.
+- **Reasoning/Standard** (`claude-sonnet-4.6`, `claude-sonnet-4.5`, `gpt-5.4`, `gpt-5.2`) — Use for analysis, code review, research, test strategy, planning, and other work that needs structured judgment but not the highest-cost tier.
+- **Code** (`gpt-5.3-codex`, `gpt-5.2-codex`) — Use for implementation, refactoring, debugging, migration, and code generation tasks where code quality matters more than broad strategic reasoning.
+- **Fast** (`claude-haiku-4.5`, `gpt-5.4-mini`, `gpt-5-mini`, `gpt-4.1`) — Use for routine automation, scanning, formatting, status checks, simple transformations, and other well-defined tasks with clear inputs and easy validation.
 
 ## Context Loading Discipline
 
@@ -30,17 +31,18 @@ Use this instruction whenever choosing a model, deciding how much context to loa
 
 Load context in this order:
 
-1. **Intent classification** — match against L2 trigger map; assign fast path or full path
-2. **Fast path (confidence ≥ 0.80)**: load the pattern bundle only — pre-scoped instructions + docs for this intent type. Skip broad exploration.
-3. **Full path (confidence < 0.80 or Novel)**: load in layered order:
+1. **Intent classification** — match against L2 trigger map; compute confidence and context completeness
+2. **Fast path (confidence ≥ 0.80 + context completeness ≥ 0.70)**: load the pattern bundle only — pre-scoped instructions + docs for this intent type. Skip broad exploration.
+3. **Fast path + targeted load (confidence ≥ 0.80 + context completeness < 0.70)**: load pattern bundle, then add one targeted L3 snippet to fill the context gap.
+4. **Bundle start + explore (confidence 0.50–0.79)**: start with the closest-match pattern bundle, then enter an explore phase to resolve ambiguity.
+5. **Full HRM traversal (confidence < 0.50 or Novel)**: load in layered order (L2→L3→L4):
    - Governing instructions and the immediate task
    - The exact files, symbols, or sections needed to act
    - Supporting docs, adjacent files, or history only if the task still cannot be completed
    - Broad repository context only as a last resort
 
-Prefer targeted searches, line ranges, summaries, diffs, and handoffs before loading full files or large document sets.
-
-See `docs/execution-hierarchy.md` for the full stack, pattern bundle catalog, and confidence lifecycle.
+This two-dimensional routing matrix (confidence × context completeness) is documented in full at
+`instructions/hrm-execution.instructions.md`. For EscalationQuery types and GuidanceSignals, see the same file.
 
 ## Cost Escalation
 
@@ -100,9 +102,23 @@ When a task completes within its turn budget and tests pass, evaluate whether th
 - **If yes:** call `store_memory` with the pattern, the context it applies to, and the test that validated it. This converts learning cost into reusable knowledge and lowers future turn budgets.
 - **If no:** skip. Reinforcing well-known patterns wastes memory slots and dilutes signal.
 
-### Progress Tracking
+### Progress Tracking (TRM Estimator)
 
-Track actual turns against the estimated budget as you work. If you reach 80% of your budget with less than 50% progress, pause and reassess before continuing — do not wait until fully stuck.
+Track progress using a rolling weighted estimate updated each turn:
+
+```text
+estimate(t) = estimate(t-1) × 0.7 + observation(t) × 0.3
+```
+
+Where `observation(t)` is the fraction of task checklist items completed this turn.
+The checkpoint fires when `estimate.progress / estimate.turns_remaining < 0.6`.
+
+If TRM overhead (two-pass classification) would exceed 15% of the remaining context
+budget, skip the second pass and accept the Pass 1 result directly.
+
+See `docs/research/TRM-HRM-investigation.md` for full TRM estimator rationale and
+threshold calibration values. For the complete Reflexion failure signal format and
+two-pass classification contract, see `instructions/trm-reflexion.instructions.md`.
 
 ## Review Lens
 

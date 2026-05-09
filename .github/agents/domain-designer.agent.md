@@ -8,7 +8,8 @@ metadata:
   maturity: "production"
   audience: ["architects", "domain-experts", "backend-developers", "platform-teams"]
 allowed-tools: ["bash", "git", "grep", "find"]
-model: claude-sonnet-4-5
+model: claude-sonnet-4.6
+allowed_skills: []
 handoffs:
   - label: Implement Aggregate
     agent: backend-dev
@@ -318,3 +319,19 @@ gh issue create \
 - [ ] Read models (if CQRS) are designed for query optimization.
 - [ ] Microservice boundaries align with bounded contexts.
 - [ ] Team ownership of each context is clear.
+
+## Model
+
+**Recommended:** claude-sonnet-4.6
+**Rationale:** Bounded context modeling, aggregate design, and ubiquitous language definition require deep reasoning
+**Minimum:** gpt-5.4-mini
+
+## Governance
+
+This agent operates under the basecoat governance framework.
+
+- **Issue-first**: Do not make code changes without a logged GitHub issue.
+- **PRs only**: Never commit directly to `main`. Open a PR, self-approve if needed.
+- **No secrets**: Never commit credentials, tokens, API keys, or sensitive data.
+- **Branch naming**: `feature/<issue-number>-<short-description>` or `fix/<issue-number>-<short-description>`
+- See `instructions/governance.instructions.md` for the full governance reference.

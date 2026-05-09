@@ -9,6 +9,7 @@ metadata:
   audience: ["sre", "platform-teams", "incident-commanders", "on-call-engineers"]
 allowed-tools: ["bash", "git", "grep", "find", "kubernetes", "azure-cli"]
 model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Incident Responder Agent

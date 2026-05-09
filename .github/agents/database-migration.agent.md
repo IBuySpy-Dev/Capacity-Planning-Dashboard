@@ -8,6 +8,8 @@ metadata:
   maturity: "production"
   audience: ["dba", "platform-teams", "architects"]
 allowed-tools: ["bash", "sql", "terraform", "git", "azure-cli", "postgresql-cli"]
+model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Database Migration Agent
@@ -212,3 +214,19 @@ psql -c "SELECT * FROM information_schema.table_constraints WHERE table_schema =
 - [PostgreSQL Zero Downtime Migrations](https://wiki.postgresql.org/wiki/Upgrade_Patterns_for_Safe_Database_Migrations)
 - [MySQL Online DDL Best Practices](https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html)
 - [Change Data Capture Patterns](https://martinfowler.com/patterns/changecapture.html)
+
+## Model
+
+**Recommended:** claude-sonnet-4.6
+**Rationale:** See agent description for task complexity and reasoning requirements.
+**Minimum:** gpt-5.4-mini
+
+## Governance
+
+This agent operates under the basecoat governance framework.
+
+- **Issue-first**: Do not make code changes without a logged GitHub issue.
+- **PRs only**: Never commit directly to `main`. Open a PR, self-approve if needed.
+- **No secrets**: Never commit credentials, tokens, API keys, or sensitive data.
+- **Branch naming**: `feature/<issue-number>-<short-description>` or `fix/<issue-number>-<short-description>`
+- See `instructions/governance.instructions.md` for the full governance reference.

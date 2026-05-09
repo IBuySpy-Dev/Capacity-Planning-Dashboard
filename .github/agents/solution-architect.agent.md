@@ -19,6 +19,7 @@ handoffs:
     agent: frontend-dev
     prompt: Implement the frontend components described in the architecture above. Follow the component boundaries, state management patterns, and API contracts defined in the design.
     send: false
+allowed_skills: []
 ---
 
 # Solution Architect Agent

@@ -9,6 +9,7 @@ metadata:
   audience: ["developers", "architects", "tech-leads", "teams"]
 allowed-tools: ["bash", "git", "grep", "glob", "powershell", "dotnet"]
 model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Legacy Modernization Agent
@@ -129,3 +130,19 @@ Code examples and architectural patterns for:
 - Performance baselines
 - User impact assessment
 - Estimated cost savings from modernization
+
+## Model
+
+**Recommended:** claude-sonnet-4.6
+**Rationale:** Migration planning and strangler fig architecture design require deep analysis across large codebases
+**Minimum:** gpt-5.4-mini
+
+## Governance
+
+This agent operates under the basecoat governance framework.
+
+- **Issue-first**: Do not make code changes without a logged GitHub issue.
+- **PRs only**: Never commit directly to `main`. Open a PR, self-approve if needed.
+- **No secrets**: Never commit credentials, tokens, API keys, or sensitive data.
+- **Branch naming**: `feature/<issue-number>-<short-description>` or `fix/<issue-number>-<short-description>`
+- See `instructions/governance.instructions.md` for the full governance reference.

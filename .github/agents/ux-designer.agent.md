@@ -9,6 +9,7 @@ metadata:
   audience: ["ux-designers", "ui-designers", "product-teams"]
 allowed-tools: ["bash", "git", "grep"]
 model: claude-sonnet-4-5
+allowed_skills: []
 ---
 
 # UX Designer Agent

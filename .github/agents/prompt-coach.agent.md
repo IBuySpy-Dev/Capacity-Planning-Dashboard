@@ -9,6 +9,7 @@ metadata:
   audience: ["prompt-engineers", "ai-engineers", "developers"]
 allowed-tools: ["bash", "git", "grep"]
 model: gpt-5.3-codex
+allowed_skills: []
 ---
 
 # Prompt Coach Agent

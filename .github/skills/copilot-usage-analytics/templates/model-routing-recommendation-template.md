@@ -38,11 +38,12 @@ For each task type identified above, evaluate against the decision criteria belo
 
 ## Model Tier Reference
 
-| Tier | Example Models | Best For |
+| Tier | Models | Best For |
 |---|---|---|
-| Lightweight | GPT-4o-mini, Claude Haiku | Triage, classification, short summaries, simple rewrites |
-| Balanced | GPT-4o, Claude Sonnet | Code generation, refactoring, documentation, structured analysis |
-| High-capability | Claude Opus, o1 | Complex reasoning, architecture, security-critical tasks |
+| Fast | Claude Haiku 4.5, GPT-5.4 mini, GPT-5 mini, GPT-4.1 | Triage, classification, short summaries, binary checks, simple rewrites |
+| Standard | Claude Sonnet 4.6, Sonnet 4.5, GPT-5.4, GPT-5.2 | Code review, planning, documentation, structured analysis, refactoring |
+| Code | GPT-5.3-Codex, GPT-5.2-Codex | Code generation, debugging, migration scripts, protocol implementation |
+| Premium | Claude Opus 4.7, Opus 4.7 High, Opus 4.6 | Complex reasoning, architecture, security-critical tasks, compliance |
 
 ## Guardrails for Routing Changes
 

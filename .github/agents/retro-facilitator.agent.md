@@ -15,6 +15,7 @@ handoffs:
     agent: sprint-planner
     prompt: Use the action items and improvement areas from the retrospective above as input for the next sprint. Decompose the improvement actions into GitHub issues with labels, wave dependency maps, and acceptance criteria.
     send: false
+allowed_skills: []
 ---
 
 # Retro Facilitator Agent

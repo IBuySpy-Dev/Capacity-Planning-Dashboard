@@ -9,6 +9,7 @@ metadata:
   audience: ["dataops-engineers", "data-engineers", "platform-teams"]
 allowed-tools: ["bash", "git", "grep", "python", "sql", "terraform"]
 model: gpt-5.3-codex
+allowed_skills: []
 ---
 
 # DataOps Agent

@@ -2,10 +2,8 @@
 title: Enterprise Configuration and Policy Setup
 type: instruction
 description: "Enterprise-level GitHub Copilot policy configuration, including usage metrics enablement, seat management, and security policies."
-applyTo:
-  - enterprise
-  - github-organization
-  - governance
+applyTo: "**/*"
+distribute: false
 ---
 
 # Enterprise Configuration and Policy Setup
@@ -109,35 +107,49 @@ curl -H "Authorization: token $GH_TOKEN" \
 Once enabled, org admins can access:
 
 ```bash
-# Get usage metrics (daily aggregated data)
+# Get 28-day rolling usage report (latest)
+# Returns a download_links array pointing to NDJSON file on Azure Blob Storage
 curl -H "Authorization: token $GH_TOKEN" \
-  "https://api.github.com/orgs/{org}/copilot/metrics"
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  "https://api.github.com/orgs/{org}/copilot/metrics/reports/organization-28-day/latest"
 
-# Response includes (daily):
-# - copilot_suggestions: Total suggestions
-# - copilot_acceptances: Accepted suggestions
-# - copilot_copilot_line_acceptances_vs_non_copilot
-# - copilot_active_users: Unique active users
-# - language: Breakdown by Python, JavaScript, Java, etc.
-# - editor: Breakdown by VSCode, JetBrains, Neovim, etc.
+# Get 1-day report for a specific date
+curl -H "Authorization: token $GH_TOKEN" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  "https://api.github.com/orgs/{org}/copilot/metrics/reports/organization-1-day?day=2026-05-07"
+
+# NDJSON report fields (each line is a JSON object):
+# - daily_active_users
+# - daily_active_cli_users
+# - daily_active_copilot_cloud_agent_users
+# - weekly_active_users
+# Per language, editor, model, etc.
+
+# NOTE: Old endpoint GET /orgs/{org}/copilot/metrics was sunset 2026-04-02.
+# Requires: admin:org or read:org scope (no manage_billing:copilot needed)
 ```
 
 ### Querying Metrics via API
 
 ```bash
-# Get 7-day usage report
+# Get 28-day report (latest)
 curl -H "Authorization: token $GH_TOKEN" \
-  "https://api.github.com/orgs/{org}/copilot/metrics/reports/org-7-day"
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  "https://api.github.com/orgs/{org}/copilot/metrics/reports/organization-28-day/latest"
 
-# Get 28-day usage report
+# Get 1-day report
 curl -H "Authorization: token $GH_TOKEN" \
-  "https://api.github.com/orgs/{org}/copilot/metrics/reports/org-28-day"
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  "https://api.github.com/orgs/{org}/copilot/metrics/reports/organization-1-day?day=YYYY-MM-DD"
 
-# Each report includes:
-# - total_active_users
-# - total_engagement_metrics
-# - language_breakdown
-# - editor_breakdown
+# Per-user breakdown (28-day)
+curl -H "Authorization: token $GH_TOKEN" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  "https://api.github.com/orgs/{org}/copilot/metrics/reports/users-28-day/latest"
+
+# Response is { "download_links": ["<url>"], "report_start_day": "...", "report_end_day": "..." }
+# Download the NDJSON file — each line: total_active_users, engagement_metrics,
+# language_breakdown, editor_breakdown, model_breakdown
 ```
 
 ### Common Issues
@@ -238,20 +250,21 @@ Use this checklist when setting up GitHub Copilot for your enterprise:
 
 ## Troubleshooting
 
-### "Usage metrics API returns 404"
+**"Usage metrics API returns 404"**
 
-**Cause:** Enterprise admin hasn't enabled the policy.
+**Cause:** Using the old `GET /orgs/{org}/copilot/metrics` endpoint, which was **sunset 2026-04-02**.
 
-**Solution:** Go to Enterprise → Settings → Policies → Copilot → Usage metrics → Enable.
-
-**Verify:**
+**Solution:** Switch to the new reports API:
 
 ```bash
 curl -H "Authorization: token $GH_TOKEN" \
-  "https://api.github.com/orgs/{org}/copilot/metrics"
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  "https://api.github.com/orgs/{org}/copilot/metrics/reports/organization-28-day/latest"
 
-# Should return 200 with metrics data (not 404)
+# Should return 200 with { "download_links": [...] }
 ```
+
+If you still get 404, ensure the enterprise admin has enabled the Copilot usage metrics policy.
 
 ### "User cannot see Copilot in their IDE"
 

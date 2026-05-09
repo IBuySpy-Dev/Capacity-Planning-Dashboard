@@ -9,6 +9,7 @@ metadata:
   audience: ["devops-engineers", "platform-teams", "sre", "architects"]
 allowed-tools: ["bash", "git", "terraform", "kubernetes", "docker", "azure-cli"]
 model: gpt-5.3-codex
+allowed_skills: []
 ---
 
 # DevOps Engineer Agent

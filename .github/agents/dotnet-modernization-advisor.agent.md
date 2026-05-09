@@ -9,6 +9,7 @@ metadata:
   owner: platform-engineering
 allowed-tools: ["read_file", "write_file", "list_dir", "run_terminal_command", "create_github_issue"]
 model: claude-sonnet-4.6
+allowed_skills: []
 tools: [read_file, write_file, list_dir, run_terminal_command, create_github_issue]
 ---
 
@@ -41,3 +42,19 @@ Purpose: guide teams through a three-stage .NET modernization lifecycle (assessm
 - Phased execution plan with gates and rollback criteria
 - Dependency compatibility matrix and remediation backlog
 - Test and validation plan mapped to each execution phase
+
+## Model
+
+**Recommended:** claude-sonnet-4.6
+**Rationale:** Upgrade path assessment, breaking change analysis, and dependency compatibility require structured reasoning
+**Minimum:** gpt-5.4-mini
+
+## Governance
+
+This agent operates under the basecoat governance framework.
+
+- **Issue-first**: Do not make code changes without a logged GitHub issue.
+- **PRs only**: Never commit directly to `main`. Open a PR, self-approve if needed.
+- **No secrets**: Never commit credentials, tokens, API keys, or sensitive data.
+- **Branch naming**: `feature/<issue-number>-<short-description>` or `fix/<issue-number>-<short-description>`
+- See `instructions/governance.instructions.md` for the full governance reference.

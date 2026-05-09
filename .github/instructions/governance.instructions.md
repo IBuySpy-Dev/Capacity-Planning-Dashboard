@@ -2,6 +2,7 @@
 description: "CRITICAL — Read this first. Governance rules for all AI agents working in this repository. Covers issue-first mandate, secret policy, PR-only workflow, branch naming, when to stop vs proceed, and token/model awareness stub."
 applyTo: "**/*"
 priority: 1
+distribute: false
 ---
 
 # Governance Instructions for AI Agents

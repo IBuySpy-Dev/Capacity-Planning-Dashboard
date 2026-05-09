@@ -9,6 +9,7 @@ metadata:
   audience: ["performance-engineers", "developers", "platform-teams"]
 allowed-tools: ["bash", "git", "grep", "python"]
 model: gpt-5.3-codex
+allowed_skills: []
 ---
 
 # Performance Analyst Agent

@@ -9,6 +9,7 @@ metadata:
   audience: ["architects", "platform-teams", "devops-engineers"]
 allowed-tools: ["bash", "git", "terraform", "azure-cli", "powershell"]
 model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Azure Landing Zone Agent

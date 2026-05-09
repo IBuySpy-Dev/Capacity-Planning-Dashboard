@@ -9,6 +9,7 @@ metadata:
   audience: ["technical-writers", "documentation-teams", "developers"]
 allowed-tools: ["bash", "git", "grep", "find"]
 model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Tech Writer Agent

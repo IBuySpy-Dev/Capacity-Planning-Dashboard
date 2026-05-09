@@ -9,6 +9,7 @@ metadata:
   audience: ["frontend-developers", "ux-engineers", "ui-architects"]
 allowed-tools: ["bash", "git", "grep", "find", "node", "npm"]
 model: gpt-5.3-codex
+allowed_skills: []
 ---
 
 # Frontend Development Agent

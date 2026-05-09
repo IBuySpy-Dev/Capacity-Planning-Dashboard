@@ -9,6 +9,7 @@ metadata:
   audience: ["mlops-engineers", "llm-platform-teams", "data-scientists", "architects"]
 allowed-tools: ["bash", "git", "terraform", "python", "azure-cli", "kubernetes"]
 model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # LLMOps Agent

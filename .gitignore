@@ -24,6 +24,19 @@ artifacts/
 secrets.*
 .last-ingest-key.txt
 
+# Private keys and certificates (never commit)
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+
+# Local settings files (Azure Functions, ASP.NET Core)
+local.settings.json
+appsettings.Development.json
+appsettings.Local.json
+
 # Build outputs
 dist/
 build/
