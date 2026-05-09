@@ -128,6 +128,8 @@ Security and governance bundles (marked `[pin]`) are exempt from confidence deca
 | gh aw compile | Markdown body edits don't require recompile; frontmatter changes do. Run `gh aw compile <name>` | `gh-aw` |
 | `workflow_run` trigger | Add `types: [completed]`; check `conclusion == 'failure'` in body | `ci-workflow` |
 | Copilot agent PR | Shows `action_required` (0 jobs) — maintainer must push empty commit to trigger CI | `ci-approval` [pin] |
+| sqlpackage in CI | `dotnet tool install -g microsoft.sqlpackage` installs legacy syntax — use `/Action:Publish` NOT `publish` subcommand. Error signal: `Unrecognized command line argument 'publish'` + `Missing required argument '<Action>'` | `sqlpackage-syntax` |
+| Azure SQL firewall | SQL server with `publicNetworkAccess=Disabled` requires `az sql server update --set publicNetworkAccess=Enabled` BEFORE adding firewall rule; disable again in `if: always()` cleanup step | `sql-firewall-pattern` [pin] |
 
 ### Testing
 
