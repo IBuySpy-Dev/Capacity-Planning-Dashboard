@@ -8,8 +8,31 @@ This repository contains the initial platform scaffold for a native Azure capaci
 ## Local Development
 
 1. Copy `.env.sample` to `.env` and fill in values.
-2. Start a local SQL Server: `docker compose up -d` (requires Docker Desktop; see [docker-compose.yml](docker-compose.yml) once #48 is complete).
+2. Start a local SQL Server: `docker compose up -d` (requires [Docker Desktop](https://www.docker.com/products/docker-desktop/)).
 3. Run the app: `npm install && npm start`.
+
+### Local SQL Server with Docker
+
+```sh
+# Start SQL Server 2022 (first run downloads ~1.5 GB image)
+docker compose up -d
+
+# Watch logs until healthy
+docker compose logs -f mssql
+```
+
+Set these in your `.env` for the Docker SQL instance:
+
+```env
+SQL_SERVER=localhost
+SQL_DATABASE=master
+SQL_AUTH_MODE=sql
+SQL_USER=sa
+SQL_PASSWORD=DevLocalPa$$w0rd1
+SQL_TRUST_SERVER_CERTIFICATE=true
+```
+
+> **Note:** `SQL_TRUST_SERVER_CERTIFICATE=true` is required for the Docker SQL instance (self-signed cert). Never set this in production.
 
 See [`docs/ENVIRONMENT_VARIABLES.md`](docs/ENVIRONMENT_VARIABLES.md) for a full reference of all supported environment variables.
 

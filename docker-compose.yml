@@ -1,0 +1,45 @@
+# Docker Compose — Local Development
+#
+# Starts a SQL Server 2022 instance matching the CI environment.
+# Usage:
+#   docker compose up -d          # Start SQL Server in background
+#   docker compose down           # Stop and remove container
+#   docker compose down -v        # Stop and remove container + data volume
+#
+# After starting, copy .env.sample to .env and set:
+#   SQL_SERVER=localhost
+#   SQL_DATABASE=CapacityDashboard
+#   SQL_AUTH_MODE=sql
+#   SQL_USER=sa
+#   SQL_PASSWORD=DevLocalPa$$w0rd1
+#   SQL_TRUST_SERVER_CERTIFICATE=true
+#
+# Then run: npm start
+#
+# See docs/ENVIRONMENT_VARIABLES.md for the full env var reference.
+
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: capdash-sql
+    environment:
+      ACCEPT_EULA: "Y"
+      # Change this password — must be 8+ chars with upper, lower, digit, and symbol.
+      MSSQL_SA_PASSWORD: "DevLocalPa$$w0rd1"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    healthcheck:
+      test: >
+        /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa
+        -P "DevLocalPa$$w0rd1" -C -Q "SELECT 1" -b
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  mssql-data:
+    driver: local
