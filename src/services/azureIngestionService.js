@@ -13,6 +13,7 @@ const {
   getAISettings,
   shouldRefreshModelCatalog
 } = require('./aiIngestionService');
+const telemetry = require('./telemetry');
 
 const ARM_SCOPE = 'https://management.azure.com/.default';
 const ARM_BASE = 'https://management.azure.com';
@@ -507,6 +508,10 @@ async function runCapacityIngestion(options = {}) {
   ingestStatus.lastError = null;
   ingestStatus.lastRegionErrors = [];
 
+  telemetry.trackEvent('ingestion.started', {
+    regionPreset: options.regionPreset || process.env.INGEST_REGION_PRESET || 'USMajor'
+  });
+
   try {
     const credential = getCredential();
     const token = (await credential.getToken(ARM_SCOPE)).token;
@@ -710,9 +715,24 @@ async function runCapacityIngestion(options = {}) {
       regionErrorCount: regionErrors.length
     };
 
+    telemetry.trackEvent('ingestion.completed', {
+      regionPreset: options.regionPreset || process.env.INGEST_REGION_PRESET || 'USMajor',
+      subscriptionCount: String(subscriptions.length)
+    }, {
+      insertedRows,
+      insertedScoreRows,
+      insertedAIRows: aiRows.length,
+      insertedAIModelRows,
+      durationMs
+    });
+
     return ingestStatus.lastSummary;
   } catch (err) {
     ingestStatus.lastError = err.message;
+    telemetry.trackException(err, {
+      operation: 'runCapacityIngestion',
+      regionPreset: options.regionPreset || process.env.INGEST_REGION_PRESET || 'USMajor'
+    });
     throw err;
   } finally {
     ingestStatus.inProgress = false;
