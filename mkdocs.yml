@@ -1,0 +1,77 @@
+site_name: Capacity Planning Dashboard
+site_description: Azure capacity visibility, quota management, and placement scoring for platform teams
+site_url: https://ibuyspy-dev.github.io/Capacity-Planning-Dashboard/
+repo_url: https://github.com/IBuySpy-Dev/Capacity-Planning-Dashboard
+repo_name: IBuySpy-Dev/Capacity-Planning-Dashboard
+edit_uri: edit/main/docs/
+
+docs_dir: docs/site
+site_dir: _site
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: blue
+      accent: light blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue
+      accent: light blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - toc.integrate
+    - content.code.copy
+    - content.code.annotate
+    - search.highlight
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Auth Flow: architecture/auth-flow.md
+      - RBAC Topology: architecture/rbac.md
+      - Deployment Topology: architecture/deployment.md
+      - Ingestion Pipeline: architecture/ingestion.md
+  - Getting Started:
+      - Prerequisites: getting-started/prerequisites.md
+      - Local Development: getting-started/local-dev.md
+  - Deployment Guide:
+      - Bootstrap (OIDC + SPN): deployment/bootstrap.md
+      - Bicep Deploy: deployment/bicep-deploy.md
+      - First-Run Checklist: deployment/checklist.md
+  - Reference:
+      - Configuration: reference/configuration.md
+      - API Endpoints: reference/api.md
+  - Operations:
+      - Health & Monitoring: operations/health.md
+      - Troubleshooting: operations/troubleshooting.md
