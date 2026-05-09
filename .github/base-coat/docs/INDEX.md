@@ -99,6 +99,7 @@
 - [operations/ENTERPRISE_SECURITY_HARDENING.md](operations/ENTERPRISE_SECURITY_HARDENING.md) — Security hardening guide
 - [operations/BLOCKED_ISSUES.md](operations/BLOCKED_ISSUES.md) — Blocked issues tracking
 - [operations/TELEMETRY_ADOPTION.md](operations/TELEMETRY_ADOPTION.md) — Adoption telemetry guide
+- [operations/GITHUB_SECRETS.md](operations/GITHUB_SECRETS.md) — Repository secrets setup and rotation guide
 - [operations/security/](operations/security/) — Security policies and audit docs
 
 ## Templates (`docs/templates/`)

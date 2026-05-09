@@ -9,6 +9,7 @@ metadata:
   audience: ["platform-teams", "agents", "developers"]
 allowed-tools: ["bash", "git"]
 model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Guardrail Agent

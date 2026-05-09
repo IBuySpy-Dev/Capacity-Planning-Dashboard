@@ -9,6 +9,7 @@ metadata:
   audience: ["ai-engineers", "developers", "platform-teams"]
 allowed-tools: ["bash", "git", "grep", "python", "node"]
 model: claude-sonnet-4
+allowed_skills: []
 ---
 
 # MCP Developer Agent

@@ -9,6 +9,7 @@ metadata:
   audience: ["backend-developers", "architects", "platform-teams"]
 allowed-tools: ["bash", "git", "grep", "python", "node"]
 model: gpt-5.3-codex
+allowed_skills: []
 ---
 
 # Middleware Development Agent

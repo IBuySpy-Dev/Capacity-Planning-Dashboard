@@ -9,6 +9,7 @@ metadata:
   audience: ["release-managers", "devops-engineers", "platform-teams"]
 allowed-tools: ["bash", "git", "grep", "powershell"]
 model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Release Impact Advisor Agent
@@ -308,3 +309,19 @@ Flexible changelog generation with customizable templates:
 ---
 
 This Release Impact Advisor agent empowers teams to deploy confidently by providing comprehensive risk assessment, strategic guidance, and automation throughout the release lifecycle.
+
+## Model
+
+**Recommended:** claude-sonnet-4.6
+**Rationale:** Blast radius analysis, risk scoring, and deployment strategy selection require strong reasoning
+**Minimum:** gpt-5.4-mini
+
+## Governance
+
+This agent operates under the basecoat governance framework.
+
+- **Issue-first**: Do not make code changes without a logged GitHub issue.
+- **PRs only**: Never commit directly to `main`. Open a PR, self-approve if needed.
+- **No secrets**: Never commit credentials, tokens, API keys, or sensitive data.
+- **Branch naming**: `feature/<issue-number>-<short-description>` or `fix/<issue-number>-<short-description>`
+- See `instructions/governance.instructions.md` for the full governance reference.

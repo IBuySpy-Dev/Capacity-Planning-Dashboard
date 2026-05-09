@@ -1,6 +1,6 @@
 {
   "name": "base-coat",
-  "version": "3.11.0",
+  "version": "3.25.0",
   "releaseDate": "2026-05-09",
-  "notes": "v3.11.0: Docs reorganization, memory design docs, and 10 architecture diagrams."
+  "notes": "Consumer reliability and asset coverage: naming ADR, version drift detection, security guardrails, new skills (azure-linux-app-service, cross-stack-modernization, Entra SQL auth), expanded agents (legacy-modernization, self-healing-ci), memory system (memory-promoter, repeat-fix detector, batch submit)"
 }

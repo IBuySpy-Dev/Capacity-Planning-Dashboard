@@ -4,21 +4,25 @@ description: "Reference map of GitHub Copilot usage APIs — which endpoints exi
 
 # Copilot CLI Usage API Landscape
 
-Last reviewed: <!-- YYYY-MM-DD -->
+Last reviewed: 2026-05-08
 
 This document maps the available and unavailable GitHub and Microsoft APIs for accessing Copilot CLI and agent session usage data.
 
 ## Available APIs
 
-### GitHub REST — Copilot IDE Metrics
+> ⚠️ **API Migration (2026-04-02):** The legacy `/copilot/metrics` and `/copilot/usage`
+> endpoints were sunset. All usage data is now under `/copilot/metrics/reports/`.
+
+### GitHub REST — Copilot Usage Metrics (Current)
 
 | Property | Value |
 |---|---|
-| Endpoint | `GET /orgs/{org}/copilot/usage` |
-| Auth | `Bearer <GitHub token>` with `manage_billing:copilot` scope |
-| Returns | Daily active users, suggestion counts, acceptance rates, and seat utilization for IDE completions |
-| Limitation | **Does not include CLI/agent token consumption, model identity, or per-session cost** |
-| Docs | <https://docs.github.com/en/rest/copilot/copilot-usage> |
+| Endpoint | `GET /orgs/{ORG}/copilot/metrics/reports/organization-28-day/latest` |
+| Auth | `Bearer <GitHub token>` with `admin:org` or `read:org` scope |
+| Returns | Download link to NDJSON report: DAU, CLI users, agent users, weekly active users (28-day window) |
+| Also available | `organization-1-day?day=YYYY-MM-DD`, `users-1-day`, `users-28-day/latest` |
+| Limitation | **Does not include per-session cost, model identity, or token-level data** |
+| Docs | <https://docs.github.com/en/rest/copilot/copilot-usage-metrics> |
 
 ### GitHub REST — Copilot Billing
 
@@ -34,11 +38,11 @@ This document maps the available and unavailable GitHub and Microsoft APIs for a
 
 | Property | Value |
 |---|---|
-| Endpoint | `GET /enterprises/{enterprise}/copilot/metrics` |
-| Auth | `Bearer <GitHub token>` with `manage_billing:copilot` scope |
-| Returns | Aggregate IDE metrics at enterprise level |
-| Limitation | **No CLI/agent data; enterprise-only** |
-| Docs | <https://docs.github.com/en/rest/copilot/copilot-metrics> |
+| Endpoint | `GET /enterprises/{enterprise}/copilot/metrics/reports/enterprise-28-day/latest` |
+| Auth | `Bearer <GitHub token>` with `admin:org` scope |
+| Returns | Download link to NDJSON report with enterprise-wide aggregate metrics |
+| ~~Legacy~~ | ~~`GET /enterprises/{enterprise}/copilot/metrics`~~ — **sunset 2026-04-02** |
+| Docs | <https://docs.github.com/en/rest/copilot/copilot-usage-metrics> |
 
 ## Missing / Unavailable APIs
 

@@ -15,6 +15,7 @@ handoffs:
     agent: sprint-planner
     prompt: Use the user stories and prioritization above as the sprint goal. Decompose them into GitHub issues with labels, wave dependency maps, agent assignments, and acceptance criteria.
     send: false
+allowed_skills: []
 ---
 
 # Product Manager Agent

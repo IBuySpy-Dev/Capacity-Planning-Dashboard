@@ -8,6 +8,8 @@ metadata:
   maturity: "production"
   audience: ["security-engineers", "devops-engineers", "platform-teams"]
 allowed-tools: ["bash", "git", "terraform"]
+model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Supply Chain Security Agent
@@ -484,3 +486,19 @@ steps:
 - [SBOM/CycloneDX](https://cyclonedx.org/)
 - [SPDX Specification](https://spdx.dev/)
 - [in-toto Provenance](https://in-toto.io/)
+
+## Model
+
+**Recommended:** claude-sonnet-4.6
+**Rationale:** Supply chain risk analysis, dependency trust evaluation, and SBOM validation require structured reasoning
+**Minimum:** gpt-5.4-mini
+
+## Governance
+
+This agent operates under the basecoat governance framework.
+
+- **Issue-first**: Do not make code changes without a logged GitHub issue.
+- **PRs only**: Never commit directly to `main`. Open a PR, self-approve if needed.
+- **No secrets**: Never commit credentials, tokens, API keys, or sensitive data.
+- **Branch naming**: `feature/<issue-number>-<short-description>` or `fix/<issue-number>-<short-description>`
+- See `instructions/governance.instructions.md` for the full governance reference.

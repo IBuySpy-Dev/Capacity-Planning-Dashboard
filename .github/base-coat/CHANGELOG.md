@@ -4,7 +4,521 @@ All notable changes to this repository should be recorded in this file.
 
 ## Unreleased
 
-## 3.11.0 - 2026-05-09
+## 3.25.0 - 2026-05-09
+
+### Added
+
+- `docs/architecture/decisions/adr-001-naming-convention.md` — ADR clarifying `basecoat` vs `base-coat` naming split (#638)
+- `.github/workflows/check-basecoat-version-callable.yml` — callable version drift detection workflow for consumer repos (#648)
+- `.github/workflow-templates/check-basecoat-version.yml` — starter template for consumer repos
+- `instructions/workflow-integrity.instructions.md` — GitHub Actions security guardrails: injection, credentials, pinned actions (#642)
+- `instructions/workflow-file-integrity.instructions.md` — workflow YAML corruption prevention (#643)
+- `skills/azure-linux-app-service/SKILL.md` — Python/Ruby/Node.js PaaS on App Service Linux (#644)
+- `skills/cross-stack-modernization/SKILL.md` — language-agnostic modernization patterns: strangler fig, ACL, risk scoring (#645)
+- `agents/memory-promoter.agent.md` — promotes session patterns to memory contribution payloads (#627)
+- `scripts/detect-repeat-fixes.ps1` — scans session-state for recurring high-frequency fix patterns (#630)
+
+### Changed
+
+- `skills/database-migration/SKILL.md` — extended with Entra-only SQL auth: SID-based CREATE USER, managed identity (#647)
+- `agents/legacy-modernization.agent.md` — added Python, Ruby, Java, Node.js migration patterns (#639)
+- `agents/self-healing-ci.agent.md` — added Azure App Service PaaS startup failure patterns (#640)
+- `.github/workflows/submit-learning-callable.yml` — added batch `memories` JSON array input (#631)
+
+## 3.24.0 - 2026-05-09
+
+### Added
+
+- `scripts/audit-assets.ps1` — quality scoring rubric for all agents, skills, and instructions (max 10 pts each); outputs table, markdown, or JSON; grades library A–F
+- `tests/quality-gate-tests.ps1` — CI-blocking gate: fails if avg score < 5.0, red pct > 50%, any zero-score asset, or any category avg < 4.0
+- `.github/workflows/asset-health.yml` — weekly asset health report posted to job summary; opens GitHub issue if grade is F
+- `-AssetDetail` flag on `scripts/adoption/detect-basecoat.ps1` — per-asset adoption rate view across consumer repos (current/stale/missing per asset)
+- Quality gate wired into `tests/run-tests.ps1` (runs after MCP tests)
+- Issue #625: investigate CLI and VS Code extension for agent runtime telemetry signals
+
+### Changed
+
+- `scripts/audit-assets.ps1` progress messages suppressed from stdout when `-Format json` to allow clean JSON piping
+
+## 3.23.0 - 2026-05-09
+
+### Multi-Agent Guidance Management (#614-617)
+
+Implements multi-agent strategy research and two new creator-verifier agents.
+
+#### docs/research/multi-agent-strategy-matrix.md
+
+Maps 8 BaseCoat operational tasks to best-fit agent patterns using the
+Eisenhower x Cynefin framework and Decision Book models. Includes a pattern
+selection decision tree.
+
+#### docs/research/multi-agent-bmc.md
+
+Business Model Canvas for the BaseCoat multi-agent system. Covers value
+propositions, customer segments, channels, revenue streams (measured in
+adoption and knowledge quality), key activities, and cost structure.
+
+#### agents/guidance-author.agent.md
+
+Creator agent that drafts new BaseCoat guidance assets (instructions, skills,
+agents, prompts) from a plain-language description. Handoffs to
+guidance-reviewer for validation.
+
+#### agents/guidance-reviewer.agent.md
+
+Verifier agent that validates guidance drafts against lint rules, frontmatter
+schema, required sections, and BaseCoat conventions. Returns structured
+PASS/FAIL verdict with line-level findings. Handoffs back to guidance-author
+on FAIL for correction.
+
+#### docs/architecture/multi-agent-orchestration-patterns.md
+
+Added two new patterns: Creator-Verifier Loop (with LangGraph StateGraph
+implementation and conditional retry edges) and Pub-Sub Broadcast for memory
+promotion events (event schema, publisher/subscriber templates,
+repository_dispatch wiring).
+
+### Ops
+
+- **basecoat-memory validate.yml** (#619): improved PR validation — now checks
+  all required fields (subject, fact, citations, confidence), detects duplicate
+  subjects within a PR, and validates fact length (max 300 chars)
+- **Sprint 20-22 memories contributed** (#618): 7 memories submitted to
+  basecoat-memory via the callable workflow (ci, git, authoring, process, memory
+  domains)
+
+## 3.22.0 - 2026-05-09
+
+### Enterprise Onboarding (#623)
+
+Reduces internal friction to near-zero. After a one-time admin step, any
+IBuySpy-Shared repo can contribute learnings with a single command.
+
+#### docs/memory/SETUP-INTERNAL.md
+
+Internal org guide. Admin sets `MEMORY_REPO_TOKEN` as an org-level Actions
+secret once; every repo in the org inherits it automatically with no per-repo
+configuration.
+
+#### docs/memory/SETUP-EXTERNAL.md
+
+External org step-by-step guide covering PAT creation, org-level vs per-repo
+secret options, onboarding script usage, callable workflow copy-paste, token
+rotation, and a troubleshooting table.
+
+#### scripts/onboard-basecoat.sh
+
+One-command enlistment. Adds the `basecoat-enabled` topic and creates the
+three learning labels. Infers repo from git remote if `--repo` is omitted.
+Idempotent - safe to re-run.
+
+#### .github/workflow-templates/submit-learning.yml
+
+Org starter workflow. Appears in the **Actions - New workflow** UI for all
+`IBuySpy-Shared` repos automatically. No file copy needed - fill form, run.
+
+#### .github/workflows/auto-enlist.yml
+
+Admin bulk-enlistment workflow. Accepts a comma-separated repo list or sweeps
+the entire org. Defaults to `dry_run: true` for safety.
+
+## 3.21.0 - 2026-05-09
+
+### Lower Contribution Barriers (#622)
+
+Consumer repos can now contribute learnings via five distinct paths with
+progressively lower tooling requirements:
+
+| Path | Requirements |
+|---|---|
+| Label issue/PR | `basecoat-enabled` topic (already exists) |
+| GitHub issue form | GitHub account only — zero local tools |
+| Reusable workflow | One workflow file + repo secret |
+| `submit-learning.sh` | `bash`, `curl`, `jq`, PAT |
+| `submit-learning.ps1` | PowerShell, `gh` CLI, PAT |
+
+#### scripts/submit-learning.sh
+
+Bash equivalent of `submit-learning.ps1`. Uses the GitHub REST API directly —
+no `git clone`, no `gh` CLI, no PowerShell. Works on any Linux/macOS environment
+with `bash`, `curl`, and `jq`.
+
+#### .github/ISSUE_TEMPLATE/memory-contribution.yml
+
+Structured issue form with scope-check boxes as required fields. Zero setup —
+any GitHub user can open an issue on the basecoat repo and the bot handles the rest.
+
+#### .github/workflows/memory-contribution-issue.yml
+
+Bot workflow triggered when an issue receives the `memory-contribution` label.
+Parses the structured form fields, validates scope and format, pushes a candidate
+to `basecoat-memory/sweep-candidates/`, and comments back with confirmation.
+
+#### .github/workflows/submit-learning-callable.yml
+
+`workflow_call` + `workflow_dispatch` reusable workflow. Consumer repos call it
+from their own CI pipelines — no local tools required, runs fully in GitHub Actions.
+
+## 3.20.0 - 2026-05-09
+
+### Consumer Contribution Kit (#620, #621)
+
+Closes the gap where consumer repos (those with `basecoat-enabled` topic) had no
+documented, deliberate path to submit learnings back to basecoat memory.
+
+#### scripts/submit-learning.ps1 — Active Push
+
+New script for consumer repos. Validates the candidate against the four-point scope
+policy (generic, durable, actionable, repo-scoped), writes a structured
+YAML+Markdown file to `basecoat-memory/sweep-candidates/`, and optionally opens a
+steward review PR with `-OpenPR`. Requires `MEMORY_REPO_TOKEN` env var.
+
+#### .basecoat.yml.example — Sweep Config Template
+
+Documented YAML config template for `basecoat-enabled` repos. Covers:
+`learning_labels`, `days_back`, `team`, `contact`, `domain`, `auto_pr`.
+Copy to `.basecoat.yml` at the repo root to customize sweep behavior.
+
+#### docs/memory/CONTRIBUTING.md — Consumer Guide
+
+End-to-end guide for repo owners: enlistment, passive label-based signals,
+`.basecoat.yml` configuration, active push via `submit-learning.ps1`, scope
+policy, and the steward feedback loop.
+
+#### Improved Sweep Candidate Format
+
+`sweep-enterprise-memory.ps1` now emits a structured YAML promotion block per
+candidate with auto-guessed domain, subject key, Evidence URL, Does NOT apply to
+section, and a four-point scope checklist. Stewards can copy-paste directly to
+`memories/{domain}/{subject}.md` — no longer authoring from scratch.
+
+## 3.19.0 - 2026-05-09
+
+### Memory Lifecycle Completion
+
+#### Memory Audit Script — scripts/audit-memories.ps1 (#607, #609, #610)
+
+New script with four modes covering the full memory governance lifecycle:
+
+- **`-Validate`** — checks all `basecoat-memory` memory files for frontmatter
+  completeness, fact ≤ 300 chars, `domain:key` subject format, and scope policy
+  markers (rejects project-specific technology names). CI-safe, exits 1 on violations.
+- **`-Audit`** — scans for stale memories (configurable day threshold, default 180)
+  and low-confidence (< 0.50) memories. With `-OpenPR`, moves stale memories to
+  `deprecated/{domain}/` via a PR in `basecoat-memory`.
+- **`-Update`** — appends new evidence to an existing memory, bumps `last_validated`,
+  opens a PR.
+- **`-Purge`** — moves a memory to `deprecated/{domain}/` with a deprecation note,
+  opens a PR.
+
+#### Memory Audit Workflow — .github/workflows/memory-audit.yml (#609)
+
+Quarterly schedule (1 Jan/Apr/Jul/Oct) + `workflow_dispatch`. Runs `-Validate` on
+every scheduled run and `-Audit` on demand. `-OpenPR` input triggers automated
+deprecation PR creation for stale memories.
+
+#### Loopback: High-Confidence Hot-Index Promotion (#608)
+
+`contribute-memories.ps1` now detects memories with `confidence >= 0.90` after pushing
+and emits a clear list of hot-index promotion candidates, closing the feedback loop
+from session memory → shared memory → L2 hot cache.
+
+#### Sprint-20 Memory Payload — docs/memory/sprint-20-memories.json (#611)
+
+Eight valid basecoat-scoped patterns from sprints 15–20, structured for immediate
+contribution via `contribute-memories.ps1`. Covers: CI quirks, git hygiene, agent/skill
+authoring conventions, sprint workflow, task classification, memory scope policy, and
+markdown lint patterns.
+
+## 3.18.0 - 2026-05-09
+
+### Memory Contribution Pipeline
+
+#### Memory Contribution Script — scripts/contribute-memories.ps1 (#602)
+
+New batch export script that reads a JSON array of session memory facts and creates
+structured `memories/{domain}/{subject}.md` files in `{org}/basecoat-memory` via the
+GitHub API, opening a single PR for steward review. Supports `-DryRun` and `-Force` flags.
+
+#### sync-shared-memory.ps1: add -ExportFile mode (#601)
+
+Added `-ExportFile` parameter. After using `-Export` to generate a template and editing
+it, agents can use `-ExportFile /tmp/edit.md -Subject domain:key` to push the file to
+`basecoat-memory` on a new branch and open a PR — completing the single-memory contribution
+loop without manual `git` operations.
+
+#### Memory Contribute Workflow — .github/workflows/memory-contribute.yml (#603)
+
+New `workflow_dispatch` workflow for agent-triggered batch memory contribution. Accepts
+a base64-encoded JSON payload of memory facts, calls `contribute-memories.ps1`, and
+emits a job summary. Triggered at sprint end by the coding agent or manually by a steward.
+
+#### Memory Contribution Process Documentation — docs/memory/PROCESS.md (#604)
+
+New document covering the end-to-end pipeline: produce (store_memory) → export
+(contribute-memories.ps1 / -ExportFile) → review (PR in basecoat-memory) → promote
+(steward merges) → pull (sync-shared-memory.ps1). Includes memory domains taxonomy,
+Memory Scope Policy, steward responsibilities, and a scripts/workflows reference.
+
+#### Memory Scope Checklist in memory-index.instructions.md (#605)
+
+Added a four-point checklist (repo-scoped, generic, durable, actionable) agents must
+validate before calling `store_memory`. Added `contribute-memory` pattern bundle and
+reference link to PROCESS.md. Closes the stale-memory scope-creep issue.
+
+## 3.17.0 - 2026-05-09
+
+### Instruction Trim Completion + Workflow Reliability
+
+#### Fix Copilot Agent Assignment in issue-approve.yml (#596)
+
+Corrected the assignee username from `copilot-swe-agent` to `Copilot` (the correct
+GitHub Copilot coding agent username). Added post-assignment verification that re-fetches
+the issue and checks the `assignees` list. Posts an honest success or failure comment
+with manual instructions when assignment does not stick.
+
+#### GitHub Secrets Operations Runbook (#583)
+
+Created `docs/operations/GITHUB_SECRETS.md` documenting all 4 required repository
+secrets (`COPILOT_GITHUB_TOKEN`, `GH_AW_GITHUB_TOKEN`, `GH_AW_GITHUB_MCP_SERVER_TOKEN`,
+`STAGING_API_TOKEN`) with setup steps, required scopes, rotation schedules, and
+troubleshooting guidance.
+
+#### Instruction Modularization Batch 3 — 4 Instructions (#584)
+
+Applied references/ extraction pattern to four large instruction files:
+
+- **process.instructions.md** — condensed from 10.3 KB; references in
+  `references/process/sprint-ceremonies.md`, `issue-and-pr-workflow.md`, `release-and-coordination.md`
+- **secrets-management.instructions.md** — condensed from 9.9 KB; references in
+  `references/secrets-management/classification-and-storage.md`, `rotation-and-scanning.md`, `emergency-and-compliance.md`
+- **security-monitoring.instructions.md** — condensed from 8.8 KB; references in
+  `references/security-monitoring/siem-and-alerts.md`, `detection-rules.md`, `incident-escalation.md`
+- **observability.instructions.md** — condensed from 8.6 KB; references in
+  `references/observability/tracing-and-logging.md`, `metrics-and-sampling.md`, `dashboards-and-compliance.md`
+
+#### Instruction Modularization Batch 4 — 5 Instructions (#595)
+
+Applied references/ extraction pattern to five large instruction files:
+
+- **governance.instructions.md** — condensed from 10.9 KB; references in
+  `references/governance/workflow-rules.md`, `agent-self-governance.md`, `guardrails-reference.md`
+- **token-economics.instructions.md** — condensed from 8.0 KB; references in
+  `references/token-economics/context-routing.md`, `turn-budget.md`
+- **quality.instructions.md** — condensed from 7.8 KB; references in
+  `references/quality/pr-review-checklist.md`, `agent-handoffs.md`
+- **enterprise-configuration.instructions.md** — condensed from 10.8 KB; references in
+  `references/enterprise-configuration/seat-management.md`, `metrics-api.md`, `security-and-checklist.md`
+- **memory-index.instructions.md** — condensed from 11.2 KB; references in
+  `references/memory-index/memory-algorithms.md`
+
+
+
+### Agent Compliance + Instruction Trim
+
+#### Agent Compliance Sweep — All 74 Agents (#581)
+
+Added `allowed_skills` frontmatter, `## Model` body section, and `## Governance`
+to all agents that were missing them. Every agent now declares its default model,
+model rationale, and governance policy.
+
+- **Batch 1 (10 agents):** sprint-planner, release-manager, domain-designer,
+  infrastructure-deploy, self-healing-ci, strategy-to-automation,
+  legacy-modernization, dotnet-modernization-advisor, release-impact-advisor, feedback-loop
+- **Batch 2 (12 agents):** api-security, secrets-manager, hardening-advisor,
+  penetration-test, supply-chain-security, config-auditor, security-monitor,
+  security-operations, ha-architect, resilience-reviewer, observability-engineer,
+  production-readiness
+- **Batch 3 (52 agents):** all remaining agents
+
+Lightweight coordination agents (retro-facilitator, sprint-retrospective,
+memory-curator, merge-coordinator, rollout-basecoat, project-onboarding,
+new-customization, issue-triage) use `claude-haiku-4.5`.
+
+#### Instruction Modularization Batch 2 — 3 Instructions (#582)
+
+Applied references/ extraction pattern to three large instruction files:
+
+- **data-science.instructions.md** — condensed from 13.3 KB to 3.5 KB; detail in
+  `references/data-science/notebook-conventions.md`, `medallion-and-duckdb.md`,
+  `feature-engineering-and-training.md`
+- **data-workload-testing.instructions.md** — condensed from 11.6 KB to 2.3 KB; detail in
+  `references/data-workload-testing/data-quality-tests.md`, `layer-test-patterns.md`
+- **mutation-testing.instructions.md** — condensed from 11.5 KB to 2.4 KB; detail in
+  `references/mutation-testing/mutation-tools-and-ci.md`, `survival-patterns-and-fixes.md`
+
+#### PowerShell CI Test Job (#585)
+
+Added `test` job to `.github/workflows/ci.yml` running `pwsh tests/run-tests.ps1`
+on `ubuntu-latest` with artifact upload on failure.
+
+#### Test Fix
+
+Fixed `allowed_skills: []` empty-array validation bug in `tests/agent-integration-tests.ps1`
+(PowerShell `return @()` is coerced to `$null` at call site; wrapped with `@(...)` and
+added raw-line regex check).
+
+## 3.15.0 - 2026-05-22
+
+### Modularization Sweep + Repo Structure
+
+#### Skill Modularization Batch 3 (6 skills)
+
+Condensed 6 large SKILL.md files (all were 5.2–6.4 KB) to ≤5 KB overview files,
+extracting detailed content into `references/` subdirectories per skill.
+
+- **electron-apps** — `process-architecture.md`, `packaging-updates.md`, `testing-security.md`
+- **database-migration** — `zero-downtime-patterns.md`, `schema-versioning.md`, `operations-checklist.md`
+- **github-security-posture** — `org-checks.md`, `repo-checks.md`
+- **contract-testing** — `pact-patterns.md`, `e2e-orchestration.md`
+- **azure-waf-review** — `pillar-guide.md`, `workflow-guardrails.md`
+- **copilot-usage-analytics** — `api-landscape-detail.md`, `cost-estimation-guide.md`
+
+#### Instruction Modularization Batch 1 (3 instructions)
+
+Applied the same references/ pattern to the three largest instruction files:
+
+- **electron.instructions.md** — condensed from 15.2 KB to 4.2 KB; detail in `references/electron/ipc-security.md` and `csp-child-process.md`
+- **nextjs-react19.instructions.md** — condensed from 14.2 KB to 2.4 KB; detail in `references/nextjs/server-components.md` and `app-router.md`
+- **agents.instructions.md** — condensed from 14.1 KB to 6.5 KB; detail in `references/agents/skill-pairing.md` and `lifecycle.md`
+
+#### Issue #578 — Internal/Distributable Separation
+
+Added `distribute: false` frontmatter to repo-internal instruction files that should
+not be synced to downstream repositories:
+
+- `governance.instructions.md`
+- `enterprise-configuration.instructions.md`
+- `hrm-execution.instructions.md`
+- `token-economics.instructions.md`
+- `memory-index.instructions.md`
+
+Sync scripts already honour this flag (validated by test suite). Documented policy
+in `CONTRIBUTING.md` under "Asset Distribution". Closes #578.
+
+## 3.14.0 - 2026-05-09
+
+### HRM Formalization + Skill Batch 2 + Memory Intelligence
+
+#### HRM Phase 2 Formal Layer Contracts (`instructions/hrm-execution.instructions.md`)
+
+New instruction file formalizing the Human-Routing-Model Phase 2 adoption path from the TRM/HRM research doc:
+
+- **L0–L4 scope table** — formal input/output contracts and scope constraints per layer
+- **EscalationQuery type** — structured object (`intent`, `keywords`, `confidence`, `context_budget_remaining`, `originating_layer`, `reason`) passed between HRM layers
+- **Two-dimensional routing matrix** — confidence × context completeness: four routing quadrants from fast path to full HRM traversal
+- **Guidance signal catalogue** — 7 signals: `STAY_FAST_PATH`, `EXPAND_CONTEXT`, `ELEVATE_TO_L3`, `ELEVATE_TO_L4`, `TURN_BUDGET_AT_RISK`, `ESCALATE_SCOPE`, `CONFIDENCE_DRIFT`
+- **Agent decomposition scope table** — Sprint → Wave → Issue → Task → Sub-task with "can resolve" and "must escalate" columns
+- **Cross-layer dependency notation** — `[depends: subject@fact]` comment convention
+- Updated `instructions/memory-index.instructions.md` and `instructions/token-economics.instructions.md` with 2D routing matrix references and cross-links
+
+#### TRM Memory Intelligence (`instructions/memory-index.instructions.md`)
+
+- **Pattern bundle Bayesian confidence updates** — `confidence(t) = confidence(t-1) + 0.05 × (outcome(t) - confidence(t-1))`, bounded [0.50, 0.99]; quarterly drift review for bundles drifting > 0.15 from authored value
+- **Memory promotion heat scoring** — `heat(t) = 0.85 × heat(t-1) + 0.15 × relevance(t)` where relevance ∈ {1.0 applied, 0.5 loaded, 0.0 not loaded}; `[heat-score: <value>]` inline comment convention for L2 index entries; raw access-count thresholds replaced with heat thresholds
+
+#### Large Skill Modularization Batch 2 (`skills/`)
+
+Applied the `references/` pattern to the next 7 skills by size:
+
+| Skill | Before | After | Reference Files |
+|---|---|---|---|
+| `identity-migration` | 12.5 KB | ≤5 KB | migration-patterns, azure-integration, testing-checklist |
+| `basecoat` | 8.7 KB | ≤5 KB | authoring, governance |
+| `tech-debt` | 7.8 KB | ≤5 KB | assessment, remediation |
+| `dev-containers` | 7.8 KB | ≤5 KB | configuration, workflows |
+| `api-security` | 7.6 KB | ≤5 KB | threat-model, controls |
+| `ha-resilience` | 7.2 KB | ≤5 KB | patterns, testing |
+| `azure-devops-rest` | 7.0 KB | ≤5 KB | pipelines, extensions |
+
+Each `SKILL.md` is now a ≤5 KB overview + nav table; detailed content lives in `references/*.md`.
+
+#### Dependency Hygiene
+
+- Merged PR #577: esbuild, `@storybook/addon-essentials`, and `@storybook/react` bumps in `portal/ui`
+
+## 3.13.0 - 2026-05-08
+
+### TRM Intelligence + Skill Modularization + MCP Expansion
+
+#### TRM Reflexion Instruction (`instructions/trm-reflexion.instructions.md`)
+
+New instruction file implementing the TRM Phase 1 adoption path from the research doc:
+
+- **Two-pass intent classification** — Pass 1 on L2 trigger map; Pass 2 only in the 0.30–0.79 confidence band; converges immediately at ≥ 0.80 or ≤ 0.30
+- **Reflexion failure signal** — structured `REFLEXION` block injected into next pass on repeated misrouting; forces explicit failure reflection before reclassifying
+- **Self-consistency cap** — k=3 maximum passes; Pass 3 uses majority vote across all three passes
+- **Progress estimator** — exponential moving average `estimate(t) = estimate(t-1)×0.7 + observation(t)×0.3`; fires checkpoint when progress/turns_remaining < 0.6
+- **HRM tier integration** — TRM confidence score surfaces alongside fast/full routing decision
+- Updated `instructions/token-economics.instructions.md` and `instructions/memory-index.instructions.md` with cross-references to `trm-reflexion.instructions.md`
+
+#### Large Skill Modularization (`skills/`)
+
+Applied the `references/` pattern (proven in `service-bus-migration`) to the top 5 skills by size:
+
+| Skill | Before | After | Reference Files |
+|---|---|---|---|
+| `cqrs-event-sourcing` | 19.7 KB | 2.8 KB | command-side, event-sourcing, read-side, sagas-operations |
+| `e2e-testing` | 14.1 KB | 1.9 KB | playwright-patterns, cypress-patterns, ci-integration |
+| `penetration-testing` | 13.7 KB | 2.5 KB | test-cases, exploitation, reporting |
+| `gitops` | 9.5 KB | 2.0 KB | flux-argocd, multi-cluster-secrets |
+| `twelve-factor` | 9.5 KB | 2.4 KB | factors-1-6, factors-7-12 |
+
+Each SKILL.md is now a ≤5KB overview with a navigation table; all detail lives in `references/*.md` (≤5KB each).
+
+#### MCP Asset Search Tools (`mcp/basecoat-metrics/src/index.ts`)
+
+Three new tools added to the `basecoat-metrics` MCP server:
+
+- **`search-skills`** — fuzzy (case-insensitive substring) search across all skills by name or description; requires `REPO_DIR`
+- **`search-agents`** — same for agents
+- **`get-asset-details`** — returns full file content of any skill or agent by relative path; path traversal protection included
+- `REPO_DIR` env var documented in `mcp/basecoat-metrics/README.md`; pre-wired in `.vscode/mcp.json` via `${workspaceFolder}`
+- `tests/mcp-tests.ps1` updated to validate all three new tools and `REPO_DIR` support
+
+#### Dependency Update Advisor (`agents/`, `.github/workflows/`)
+
+New agentic workflow for automated Dependabot PR triage:
+
+- **`agents/dependency-update-advisor.agent.md`** — defines the full workflow: semver bump detection, breaking change lookup, impact surface analysis, CVE context, structured comment posting
+- **`.github/workflows/dependency-update-advisor.yml`** — GitHub Actions workflow triggered on `pull_request: opened` for Dependabot PRs; posts a `🔍 Dependency Update Risk Assessment` comment with risk level (LOW/MEDIUM/HIGH), breaking change detection from release notes, test focus suggestions, and CVE context
+
+## 3.12.0 - 2026-05-08
+
+### MCP Deployment Infra, Enterprise Memory Sweep, Portal Consolidation
+
+#### MCP Server Deployment (`mcp/basecoat-metrics/`, `infra/mcp/`, `.github/workflows/`)
+
+Full production deployment stack for the `basecoat-metrics` MCP server:
+
+- **`mcp/basecoat-metrics/Dockerfile`** — multi-stage `node:22-alpine` build, non-root `mcp` user, `HEALTHCHECK`, port 8080
+- **`mcp/basecoat-metrics/src/index.ts`** — added `StreamableHTTPServerTransport`; HTTP mode when `MCP_TRANSPORT=http` or `NODE_ENV=production`; stdio stays default for local dev
+- **`infra/mcp/main.bicep`** — Azure Container Apps + Log Analytics Workspace; scales to zero; HTTPS auto-TLS; liveness + readiness probes; HTTP scaling rule
+- **`infra/mcp/README.md`** — one-time setup, service principal creation, manual deploy steps, parameter table
+- **`.github/workflows/mcp-build.yml`** — PR gate: `npm ci` → `tsc` → Docker build smoke test → `az bicep build` lint; triggers on `mcp/**` and `infra/mcp/**`
+- **`.github/workflows/mcp-deploy.yml`** — on merge to `main`: build + push to GHCR → Bicep deploy → smoke-test `/health`; requires `AZURE_CREDENTIALS` and `MCP_RESOURCE_GROUP` secrets
+- **`.vscode/mcp.json`** — local stdio + remote HTTP entries for the deployed Azure Container Apps FQDN
+
+#### Enterprise Memory Sweep (`scripts/`, `docs/memory/`, `.github/workflows/`)
+
+Zero-maintenance enterprise repo enlistment and weekly memory extraction:
+
+- **`docs/memory/enlistment.md`** — repo opt-in via `basecoat-enabled` GitHub topic; optional `.basecoat.yml` per-repo config; `MEMORY_REPO_TOKEN` setup guide
+- **`scripts/sweep-enterprise-memory.ps1`** — discovers `basecoat-enabled` repos via GitHub API, extracts PR/issue/CHANGELOG signals, writes dated candidate files
+- **`.github/workflows/memory-sweep.yml`** — weekly sweep (Monday 06:00 UTC); writes to `{org}/basecoat-memory` (separate repo), opens PR there for human review; two-token pattern: `GITHUB_TOKEN` for reads, `MEMORY_REPO_TOKEN` for writes
+
+#### Portal Consolidation (`portal/`)
+
+- Moved `portal-ui/` → `portal/ui/` via `git mv` (full history preserved)
+- `portal/README.md` rewritten as monorepo index documenting `frontend/`, `backend/`, `ui/`, `prompts/`
+- `@basecoat/portal-ui` npm package name unchanged; only the path moved
+
+#### Test Coverage (`tests/`)
+
+- **`tests/mcp-tests.ps1`** — 8 check groups covering MCP file structure, IaC, workflows, `.vscode/mcp.json`, Dockerfile hardening, HTTP transport, Bicep outputs, secret references
+- **`tests/run-tests.ps1`** — MCP tests wired in after data-workload tests
+
+
 
 ### Docs Reorganization, Memory Design Docs, Architecture Diagrams
 

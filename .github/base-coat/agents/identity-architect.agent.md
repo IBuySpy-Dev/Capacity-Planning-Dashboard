@@ -9,6 +9,7 @@ metadata:
   audience: ["identity-architects", "security-engineers", "platform-teams"]
 allowed-tools: ["bash", "git", "azure-cli", "terraform", "powershell"]
 model: gpt-5.3-codex
+allowed_skills: []
 ---
 
 # Identity Architect Agent

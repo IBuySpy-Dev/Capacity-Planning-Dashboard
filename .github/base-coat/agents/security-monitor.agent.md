@@ -12,6 +12,8 @@ metadata:
   maturity: "beta"
   audience: ["developers"]
 allowed-tools: ["bash", "git", "grep", "find"]
+model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Security Monitor Agent
@@ -178,3 +180,19 @@ Incident Routing:
 - [OWASP Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html)
 - [CIS Controls v8 — Control 8 & 9 (Logging & Monitoring)](https://www.cisecurity.org/controls)
 - [SOC2 CC7.2 — Monitor System Components & Information for Anomalies](https://us.aicpa.org/interestareas/informationmanagement/sodp/content-landing)
+
+## Model
+
+**Recommended:** claude-sonnet-4.6
+**Rationale:** Security event correlation, anomaly detection, and alert triage require analytical reasoning
+**Minimum:** gpt-5.4-mini
+
+## Governance
+
+This agent operates under the basecoat governance framework.
+
+- **Issue-first**: Do not make code changes without a logged GitHub issue.
+- **PRs only**: Never commit directly to `main`. Open a PR, self-approve if needed.
+- **No secrets**: Never commit credentials, tokens, API keys, or sensitive data.
+- **Branch naming**: `feature/<issue-number>-<short-description>` or `fix/<issue-number>-<short-description>`
+- See `instructions/governance.instructions.md` for the full governance reference.

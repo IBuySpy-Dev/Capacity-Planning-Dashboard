@@ -9,6 +9,7 @@ metadata:
   audience: ["sre", "platform-teams", "devops-engineers"]
 allowed-tools: ["bash", "git", "terraform", "kubernetes", "python", "azure-cli"]
 model: gpt-5.3-codex
+allowed_skills: []
 ---
 
 # SRE Engineer Agent

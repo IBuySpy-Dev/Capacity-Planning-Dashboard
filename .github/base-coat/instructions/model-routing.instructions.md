@@ -11,9 +11,10 @@ Route tasks to the cheapest model that can handle them reliably.
 
 | Tier | Models | Cost | Best For |
 |------|--------|------|----------|
-| **Premium** | Claude Opus 4.6, Claude Opus 4.7 | $$$ | Complex reasoning, multi-step planning, ambiguous requirements |
-| **Standard** | Claude Sonnet 4.6, GPT-5.2 | $$ | Multi-file implementation, refactoring, code generation |
-| **Fast/Cheap** | Claude Haiku 4.5, GPT-5.4 mini | $ | Single-file edits, docs, git ops, simple lookups |
+| **Premium** | Claude Opus 4.7, Opus 4.7 High, Opus 4.7 XHigh, Opus 4.6 | $$$ | Complex reasoning, multi-step planning, security audits, ambiguous requirements |
+| **Standard** | Claude Sonnet 4.6, Sonnet 4.5, GPT-5.4, GPT-5.2 | $$ | Multi-file implementation, refactoring, code review, prose docs |
+| **Code** | GPT-5.3-Codex, GPT-5.2-Codex | $$ | Code generation, debugging, migration scripts, protocol implementation |
+| **Fast/Cheap** | Claude Haiku 4.5, GPT-5.4 mini, GPT-5 mini, GPT-4.1 | $ | Single-file edits, git ops, simple lookups, triage, binary checks |
 
 ## Task-to-Model Assignment
 
@@ -24,12 +25,19 @@ Route tasks to the cheapest model that can handle them reliably.
 - Reviewing complex PRs (security, cross-cutting changes)
 - Orchestrating multi-agent workflows (the main conversation)
 
-### Use Standard (Sonnet) for
+### Use Standard (Sonnet / GPT-5.4) for
 
 - Multi-file code implementation
 - Test suite creation
 - Refactoring across modules
 - Complex documentation with cross-references
+
+### Use Code (GPT-5.3-Codex / GPT-5.2-Codex) for
+
+- Pure code generation tasks (APIs, components, scripts)
+- Debugging and root-cause analysis in code
+- Database schema design and migration scripts
+- Protocol implementation (MCP, REST, gRPC)
 
 ### Use Fast/Cheap (Haiku) for
 
@@ -64,7 +72,7 @@ This costs 1 Haiku request instead of 4 Opus requests.
 
 Reading files in the main conversation (Opus) costs premium tokens. Instead:
 
-- Use explore agents (GPT-5.4 mini) for research
+- Use explore agents (`claude-haiku-4.5` or `gpt-5.4-mini`) for research
 - Include key file content directly in sub-agent prompts
 - Let the sub-agent (Sonnet) do its own reading
 
@@ -94,3 +102,4 @@ A typical sprint session (11 issues, ~90 min):
 | Reading agent results then re-summarizing | Double-processing at Opus cost | Trust sub-agent summaries |
 | Running `gh pr merge` inline | Simple command wastes Opus | Batch into task agent |
 | Using general-purpose for doc creation | Sonnet for a README update | Use `model: "claude-haiku-4.5"` |
+| Using Sonnet for pure code tasks | Code-optimized model underused | Use `model: "gpt-5.3-codex"` for implementation |

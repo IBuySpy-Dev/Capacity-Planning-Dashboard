@@ -9,6 +9,7 @@ metadata:
   audience: ["security-engineers", "developers", "architects"]
 allowed-tools: ["bash", "git", "grep", "find"]
 model: gpt-5.3-codex
+allowed_skills: []
 ---
 
 # Security Analyst Agent

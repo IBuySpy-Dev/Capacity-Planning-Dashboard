@@ -9,6 +9,7 @@ metadata:
   audience: ["mlops-engineers", "data-scientists", "ml-platform-teams"]
 allowed-tools: ["bash", "git", "python", "terraform", "kubernetes", "azure-cli"]
 model: gpt-5.3-codex
+allowed_skills: []
 ---
 
 # MLOps Agent

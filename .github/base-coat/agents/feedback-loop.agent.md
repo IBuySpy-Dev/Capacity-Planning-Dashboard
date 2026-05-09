@@ -9,6 +9,7 @@ metadata:
   audience: ["ai-engineers", "platform-teams", "agents"]
 allowed-tools: ["bash", "git", "gh"]
 model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Feedback Loop Agent
@@ -296,3 +297,19 @@ The Feedback Loop Agent produces the following outputs for continuous improvemen
 | Impact Report | Comparison of metrics before/after instruction changes across cohorts | Measure sustained impact of deployed changes |
 
 ---
+
+## Model
+
+**Recommended:** claude-haiku-4.5
+**Rationale:** Metric aggregation and feedback coordination are pattern-matching tasks suited to a lighter model
+**Minimum:** gpt-5.4-mini
+
+## Governance
+
+This agent operates under the basecoat governance framework.
+
+- **Issue-first**: Do not make code changes without a logged GitHub issue.
+- **PRs only**: Never commit directly to `main`. Open a PR, self-approve if needed.
+- **No secrets**: Never commit credentials, tokens, API keys, or sensitive data.
+- **Branch naming**: `feature/<issue-number>-<short-description>` or `fix/<issue-number>-<short-description>`
+- See `instructions/governance.instructions.md` for the full governance reference.

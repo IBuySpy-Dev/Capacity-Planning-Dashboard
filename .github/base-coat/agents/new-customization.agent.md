@@ -9,6 +9,7 @@ metadata:
   audience: ["developers", "agents", "architects"]
 allowed-tools: ["bash", "git"]
 model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # New Customization Agent

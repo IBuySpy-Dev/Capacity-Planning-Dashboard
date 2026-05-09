@@ -20,6 +20,7 @@ handoffs:
     agent: legacy-modernization
     prompt: Use the inventory and migration complexity assessment above to begin the modernization plan. Apply the strangler fig pattern to the components identified as high-complexity migration targets.
     send: false
+allowed_skills: []
 ---
 
 # App Inventory Agent
@@ -293,3 +294,19 @@ The agent produces standardized reports in multiple formats suitable for differe
 - **Portfolio Managers**: Markdown reports with executive summaries and categorization
 
 All outputs include timestamps, versioning information, and traceable scanning results for audit and compliance purposes.
+
+## Model
+
+**Recommended:** claude-sonnet-4.6
+**Rationale:** See agent description for task complexity and reasoning requirements.
+**Minimum:** gpt-5.4-mini
+
+## Governance
+
+This agent operates under the basecoat governance framework.
+
+- **Issue-first**: Do not make code changes without a logged GitHub issue.
+- **PRs only**: Never commit directly to `main`. Open a PR, self-approve if needed.
+- **No secrets**: Never commit credentials, tokens, API keys, or sensitive data.
+- **Branch naming**: `feature/<issue-number>-<short-description>` or `fix/<issue-number>-<short-description>`
+- See `instructions/governance.instructions.md` for the full governance reference.

@@ -49,10 +49,11 @@ Monitor the quality and accuracy of basecoat outputs:
 
 Organization-level insights into Copilot usage and effectiveness:
 
-- Endpoint: `GET /orgs/{org}/copilot/usage`
-- Acceptance rates across the organization
-- Suggestions generated and accepted by language
-- Chat sessions and session duration metrics
+- Endpoint: `GET /orgs/{org}/copilot/metrics/reports/organization-28-day/latest`
+- Returns NDJSON download link: daily/weekly active users, CLI users, agent users
+- Acceptance rates, suggestions, completions are in the per-day NDJSON data
+
+> ⚠️ Old endpoint `GET /orgs/{org}/copilot/usage` was sunset 2026-04-02.
 
 **How to correlate with basecoat:**
 
@@ -67,7 +68,8 @@ Track GitHub Copilot API metrics from 30 days before basecoat deployment through
 **Example query:**
 
 ```bash
-gh api /orgs/{org}/copilot/usage --header "Accept: application/vnd.github+json"
+gh api /orgs/{org}/copilot/metrics/reports/organization-28-day/latest \
+  --header "X-GitHub-Api-Version: 2022-11-28"
 ```
 
 ### Repository Signals (Passive)
@@ -158,8 +160,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.METRICS_TOKEN }}
         run: |
-          gh api /orgs/${{ github.repository_owner }}/copilot/usage \
-            --header "Accept: application/vnd.github+json" > copilot-metrics.json
+          gh api /orgs/${{ github.repository_owner }}/copilot/metrics/reports/organization-28-day/latest \
+            --header "X-GitHub-Api-Version: 2022-11-28" > copilot-metrics-response.json
+          # Download NDJSON from the returned link
+          DOWNLOAD_URL=$(cat copilot-metrics-response.json | python3 -c "import sys,json; print(json.load(sys.stdin)['download_links'][0])")
+          curl -s "$DOWNLOAD_URL" > copilot-metrics.json
 
       - name: Analyze repository signals
         run: |
@@ -429,8 +434,8 @@ jobs:
           # Get Copilot metrics for last 7 days
           result = subprocess.run([
               'gh', 'api',
-              '/orgs/${{ github.repository_owner }}/copilot/usage',
-              '--header', 'Accept: application/vnd.github+json'
+              gh api "/orgs/${{ github.repository_owner }}/copilot/metrics/reports/organization-28-day/latest" \
+              '--header', 'X-GitHub-Api-Version: 2022-11-28'
           ], capture_output=True, text=True)
 
           metrics = json.loads(result.stdout)

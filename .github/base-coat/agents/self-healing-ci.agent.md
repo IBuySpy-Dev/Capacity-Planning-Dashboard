@@ -9,6 +9,7 @@ metadata:
   audience: ["devops-engineers", "platform-teams", "developers"]
 allowed-tools: ["bash", "git", "grep", "terraform"]
 model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Self-Healing CI Agent
@@ -149,6 +150,112 @@ The agent activates under these conditions:
 - Create pull request with updated manifests
 - Request review from appropriate maintainers
 
+## Azure App Service PaaS Startup Failure Patterns
+
+The agent recognizes Azure App Service-specific failure signals and applies targeted remediations.
+
+### Pattern: Container Cold Start Timeout
+
+**Log signal**: `Container didn't respond to HTTP pings on port`
+
+**Cause**: The container or application runtime takes longer to initialize than the platform default allows.
+
+**Remediation**:
+
+- Increase `WEBSITES_CONTAINER_START_TIME_LIMIT` app setting (default 230 s, max 1800 s)
+- Verify the application binds to `process.env.PORT` or `%HTTP_PLATFORM_PORT%` — not a hardcoded port
+- Add a lightweight `/health` readiness endpoint that responds immediately before heavy initialization
+
+```bash
+# Azure CLI — extend container start timeout
+az webapp config appsettings set \
+  --name <app-name> --resource-group <rg> \
+  --settings WEBSITES_CONTAINER_START_TIME_LIMIT=600
+```
+
+### Pattern: Health Check Misconfiguration
+
+**Log signal**: Instance cycling, repeated `Health check failed` in activity log
+
+**Cause**: The configured health check path returns a non-200 status (e.g., 401, 404, 500), causing the platform to mark instances unhealthy and cycle them.
+
+**Remediation**:
+
+- Verify the health check path is publicly reachable and returns HTTP 200 without authentication
+- Exclude the health endpoint from authentication middleware
+- Check that the path does not trigger expensive downstream calls that can time out under load
+
+```json
+// Application Insights query — confirm health check response codes
+requests
+| where url contains "/health"
+| summarize count() by resultCode
+| order by count_ desc
+```
+
+### Pattern: Slot Swap Failure (Staging Not Warmed Up)
+
+**Log signal**: Swap stalls, staging slot never enters warmed state, swap times out
+
+**Cause**: The staging slot does not respond to warm-up pings within the swap timeout window, causing the operation to stall and roll back.
+
+**Remediation**:
+
+- Configure `applicationInitialization` in `web.config` to pre-load critical routes before the swap completes
+- Set `WEBSITE_SWAP_WARMUP_PING_PATH` and `WEBSITE_SWAP_WARMUP_PING_STATUSES` to define a valid warm-up target
+- Increase `WEBSITE_WARMUP_PATH` ping timeout if the application startup is legitimately slow
+
+```xml
+<!-- web.config — applicationInitialization for slot warm-up -->
+<system.webServer>
+  <applicationInitialization remapManagedRequestsTo="/warmup" skipManagedModules="true">
+    <add initializationPage="/health" hostName="" />
+    <add initializationPage="/api/warmup" hostName="" />
+  </applicationInitialization>
+</system.webServer>
+```
+
+```bash
+# App settings for swap warm-up ping
+az webapp config appsettings set \
+  --name <app-name> --resource-group <rg> --slot staging \
+  --settings WEBSITE_SWAP_WARMUP_PING_PATH=/health \
+             WEBSITE_SWAP_WARMUP_PING_STATUSES=200
+```
+
+### Pattern: Missing File or Module at Startup
+
+**Log signal**: `Error: ENOENT: no such file or directory`
+
+**Cause**: The deployment package is missing expected files — common after partial deployments, `.gitignore` misconfigurations, or Oryx build failures that omit `node_modules` or compiled assets.
+
+**Remediation**:
+
+- Enable Oryx build logging (`SCM_DO_BUILD_DURING_DEPLOYMENT=true`) and inspect the Kudu build log
+- Confirm `node_modules` is not committed to source but is built during deployment
+- Validate that compiled output directories (`dist/`, `build/`) are included in the deployment artifact
+- Use `az webapp log tail` to stream real-time startup errors
+
+```bash
+# Stream live application logs
+az webapp log tail --name <app-name> --resource-group <rg>
+
+# Enable build-during-deployment
+az webapp config appsettings set \
+  --name <app-name> --resource-group <rg> \
+  --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true
+```
+
+### Azure App Service Log Reference
+
+| Log Signal | Likely Pattern |
+|---|---|
+| `Container didn't respond to HTTP pings` | Cold start timeout — increase `WEBSITES_CONTAINER_START_TIME_LIMIT` |
+| `Health check failed after N attempts` | Health check misconfiguration — verify path returns 200 |
+| `Swap operation timed out` | Slot not warmed up — add `applicationInitialization` |
+| `Error: ENOENT: no such file or directory` | Missing deployment artifact — inspect Kudu build log |
+| `An error occurred during a SwapWithPreviewApplySlotConfig` | Slot config conflict — verify app settings are not slot-sticky incorrectly |
+
 ## Integration Points
 
 ### CI/CD Platforms
@@ -243,3 +350,19 @@ The agent tracks and reports:
 - **Cross-Repo Pattern Sharing**: Share flaky test data across organization repositories
 - **Predictive Caching**: Anticipate cache invalidation needs based on recent changes
 - **Cost Optimization**: Track remediation action costs and suggest alternatives
+
+## Model
+
+**Recommended:** claude-sonnet-4.6
+**Rationale:** Log analysis, root cause identification, and remediation strategy selection require strong reasoning
+**Minimum:** gpt-5.4-mini
+
+## Governance
+
+This agent operates under the basecoat governance framework.
+
+- **Issue-first**: Do not make code changes without a logged GitHub issue.
+- **PRs only**: Never commit directly to `main`. Open a PR, self-approve if needed.
+- **No secrets**: Never commit credentials, tokens, API keys, or sensitive data.
+- **Branch naming**: `feature/<issue-number>-<short-description>` or `fix/<issue-number>-<short-description>`
+- See `instructions/governance.instructions.md` for the full governance reference.

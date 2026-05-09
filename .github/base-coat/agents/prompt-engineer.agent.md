@@ -9,6 +9,7 @@ metadata:
   audience: ["ai-engineers", "prompt-engineers", "llm-practitioners"]
 allowed-tools: ["bash", "git", "grep", "python"]
 model: gpt-5.3-codex
+allowed_skills: []
 ---
 
 # Prompt Engineer Agent

@@ -750,7 +750,260 @@ Multi-agent orchestration via LangGraph represents a significant upgrade to Base
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2025  
-**Status**: RFC (Ready for Discussion)  
+**Document Version**: 1.0
+**Last Updated**: 2025
+**Status**: RFC (Ready for Discussion)
 **Related RFC**: Issue #450 (Multi-Agent Orchestration), Issue #451 (Concurrency)
+
+---
+
+## Pattern: Creator-Verifier Loop
+
+**Related issues**: #616
+
+### Overview
+
+The Creator-Verifier pattern pairs two specialized agents in an iterative loop:
+
+- **Creator** (e.g., `guidance-author`) — produces a draft artifact
+- **Verifier** (e.g., `guidance-reviewer`) — validates the draft against deterministic rules
+
+The loop runs until the verifier returns `PASS` or a maximum iteration count is reached.
+
+### When to Use
+
+Use Creator-Verifier when:
+
+- Output correctness can be verified deterministically (lint rules, schema checks, required sections)
+- The creation task is complex enough that a single pass is unlikely to be perfect
+- Human review is expensive and should only happen on already-validated drafts
+- You want to surface exactly which rules failed, not just "it's wrong"
+
+### BaseCoat Application: Guidance Authoring
+
+```
+User describes need
+      │
+      ▼
+guidance-author (Creator)
+  - Reads conventions and templates
+  - Drafts frontmatter + body sections
+  - Estimates confidence %
+      │
+      ▼
+guidance-reviewer (Verifier)
+  - Checks frontmatter schema
+  - Validates required sections (Inputs, Workflow, Output)
+  - Applies MD031, MD036, MD040, MD047 lint rules
+  - Returns PASS / FAIL with line-level findings
+      │
+   FAIL?────────────────────────────────────────┐
+      │                                          │
+   PASS                                         │
+      │                                guidance-author re-drafts
+      ▼                                with findings applied
+Human review gate                               │
+(PR / steward approval)                         │
+      │                                          │
+      ▼                               ◄──────────┘
+  Committed                        (max 3 iterations)
+```
+
+### LangGraph Implementation
+
+```python
+from langgraph.graph import StateGraph, END
+from typing import TypedDict, Annotated, Literal
+from pydantic import BaseModel
+import operator
+
+class GuidanceState(TypedDict):
+    asset_type: str
+    name: str
+    purpose: str
+    draft_content: str
+    review_verdict: str          # "PASS" | "FAIL" | ""
+    review_findings: list[str]
+    iteration: int
+    max_iterations: int
+
+class ReviewVerdict(BaseModel):
+    verdict: Literal["PASS", "FAIL"]
+    findings: list[str]
+    ready_to_commit: bool
+
+def author_agent(state: GuidanceState) -> GuidanceState:
+    """Draft or re-draft guidance based on findings."""
+    prompt = build_author_prompt(state)
+    draft = call_llm(model="claude-sonnet-4.6", prompt=prompt)
+    return {**state, "draft_content": draft, "iteration": state["iteration"] + 1}
+
+def reviewer_agent(state: GuidanceState) -> GuidanceState:
+    """Validate draft and return structured verdict."""
+    prompt = build_reviewer_prompt(state["draft_content"], state["asset_type"])
+    result = call_llm(model="claude-sonnet-4.6", prompt=prompt, response_model=ReviewVerdict)
+    return {**state, "review_verdict": result.verdict, "review_findings": result.findings}
+
+def should_continue(state: GuidanceState) -> str:
+    if state["review_verdict"] == "PASS":
+        return "done"
+    if state["iteration"] >= state["max_iterations"]:
+        return "done"
+    return "retry"
+
+workflow = StateGraph(GuidanceState)
+workflow.add_node("author", author_agent)
+workflow.add_node("reviewer", reviewer_agent)
+workflow.add_conditional_edges("reviewer", should_continue, {"retry": "author", "done": END})
+workflow.add_edge("author", "reviewer")
+workflow.set_entry_point("author")
+graph = workflow.compile()
+```
+
+### Key Design Points
+
+- **Deterministic verifier**: the reviewer applies fixed rules (no creativity), making each
+  loop iteration predictable and debuggable
+- **Findings carry forward**: each re-draft receives the previous findings, so the author
+  has context for corrections
+- **Max iterations guard**: prevents infinite loops when a draft is pathologically broken
+- **Human gate on exit**: the loop produces a validated draft, but human approval remains
+  the final merge gate
+- **Handoff wiring**: both agents have `handoffs:` in their frontmatter, enabling one-click
+  handoff in the Copilot CLI UI
+
+---
+
+## Pattern: Pub-Sub Broadcast for Memory Promotion
+
+**Related issues**: #617
+
+### Overview
+
+The Pub-Sub (publish-subscribe) pattern decouples memory promotion events from the
+downstream workflows that react to them. A single `repository_dispatch` event on
+`IBuySpy-Shared/basecoat-memory` fans out to all subscriber workflows without the
+publisher knowing who is listening.
+
+### Event Schema
+
+When a memory is promoted (PR merged to `basecoat-memory`), the merge workflow emits:
+
+```yaml
+event: memory.promoted
+domain: ci                     # one of: ci, git, authoring, process, security,
+                               # portal, testing, governance, memory, infra
+subject: ci:copilot-agent-pr
+fact: "Copilot agent PRs show action_required..."
+citations: "IBuySpy-Shared/basecoat PRs #312-314"
+confidence: 0.95
+promoted_by: memory-steward
+timestamp: "2026-05-09T09:00:00Z"
+source_repo: IBuySpy-Shared/basecoat
+```
+
+### Publisher
+
+The memory promotion PR merge trigger in `basecoat-memory`:
+
+```yaml
+# .github/workflows/on-memory-promoted.yml (in basecoat-memory repo)
+on:
+  push:
+    branches: [main]
+    paths: ["memories/**/*.md"]
+
+jobs:
+  broadcast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse promoted memory
+        id: parse
+        run: |
+          # Extract domain/subject from changed file path
+          CHANGED=$(git diff --name-only HEAD^ HEAD | grep 'memories/' | head -1)
+          DOMAIN=$(echo "$CHANGED" | cut -d/ -f2)
+          SUBJECT=$(basename "$CHANGED" .md)
+          echo "domain=$DOMAIN" >> $GITHUB_OUTPUT
+          echo "subject=$SUBJECT" >> $GITHUB_OUTPUT
+      - name: Dispatch to basecoat
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.MEMORY_REPO_TOKEN }}
+          script: |
+            await github.rest.repos.createDispatchEvent({
+              owner: 'IBuySpy-Shared',
+              repo: 'basecoat',
+              event_type: 'memory.promoted',
+              client_payload: {
+                domain: '${{ steps.parse.outputs.domain }}',
+                subject: '${{ steps.parse.outputs.subject }}',
+                timestamp: new Date().toISOString(),
+              }
+            });
+```
+
+### Subscribers
+
+Each subscriber workflow listens for `repository_dispatch` with `event_type: memory.promoted`:
+
+| Subscriber Workflow | Action |
+|---|---|
+| `sync-memory-index.yml` | Runs `sync-shared-memory.ps1` to pull new memories to `.memory/shared/` |
+| `validate-memory.yml` | Re-validates the promoted memory against scope policy |
+| `update-memory-index.yml` | Regenerates `memory-index.instructions.md` with new entry |
+| `notify-steward.yml` | Posts a comment to the originating contribution issue |
+
+### Subscriber Template
+
+```yaml
+# .github/workflows/sync-memory-index.yml (in basecoat)
+on:
+  repository_dispatch:
+    types: [memory.promoted]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pull promoted memory
+        run: |
+          pwsh scripts/sync-shared-memory.ps1 \
+            -Domain "${{ github.event.client_payload.domain }}" \
+            -Subject "${{ github.event.client_payload.subject }}"
+        env:
+          MEMORY_REPO_TOKEN: ${{ secrets.MEMORY_REPO_TOKEN }}
+```
+
+### Key Design Points
+
+- **Decoupled**: the publisher (`basecoat-memory`) does not reference subscribers; new
+  subscribers are added by creating a workflow file — no publisher changes needed
+- **Idempotent**: subscribers must handle re-delivery (use the `subject` key as an
+  idempotency token)
+- **Graceful failure**: subscriber failures do not affect the promotion itself or other
+  subscribers
+- **Audit trail**: each dispatch event appears in the Actions tab with the full payload,
+  providing a promotion audit log
+- **Cross-repo secret**: `MEMORY_REPO_TOKEN` must have `repo` scope on both `basecoat`
+  and `basecoat-memory` to dispatch across repos
+
+### Relationship to Creator-Verifier
+
+In the full guidance lifecycle, the two patterns compose:
+
+```
+guidance-author ──► guidance-reviewer ──► (PASS) ──► PR merge
+                                                         │
+                                               memory.promoted dispatch
+                                                         │
+                                         ┌───────────────┼───────────────┐
+                                         ▼               ▼               ▼
+                                   sync-memory      validate-memory  notify-steward
+                                   (pull to .memory/shared/)
+```
+
+The Creator-Verifier loop produces the validated guidance; the Pub-Sub broadcast propagates
+it to all consumers once merged.

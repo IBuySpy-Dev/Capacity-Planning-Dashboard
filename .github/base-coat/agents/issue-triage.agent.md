@@ -9,6 +9,7 @@ metadata:
   audience: ["product-managers", "team-leads", "project-managers"]
 allowed-tools: ["bash", "git", "gh"]
 model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # Issue Triage Agent

@@ -8,6 +8,8 @@ metadata:
   maturity: "production"
   audience: ["architects", "sre", "platform-teams"]
 allowed-tools: ["bash", "git", "terraform", "kubernetes"]
+model: claude-sonnet-4.6
+allowed_skills: []
 ---
 
 # High-Availability & Resilience Architect Agent
@@ -451,3 +453,19 @@ CIS AWS Foundations Benchmarks:
 - [CIS AWS Foundations Benchmark](https://www.cisecurity.org/benchmark/amazon-web-services)
 - [Google SRE Book: Monitoring Distributed Systems](https://sre.google/sre-book/monitoring-distributed-systems/)
 - [Chaos Engineering Principles](https://principlesofchaos.org/)
+
+## Model
+
+**Recommended:** claude-sonnet-4.6
+**Rationale:** High-availability topology design, failover strategy, and SLA analysis require deep architectural reasoning
+**Minimum:** gpt-5.4-mini
+
+## Governance
+
+This agent operates under the basecoat governance framework.
+
+- **Issue-first**: Do not make code changes without a logged GitHub issue.
+- **PRs only**: Never commit directly to `main`. Open a PR, self-approve if needed.
+- **No secrets**: Never commit credentials, tokens, API keys, or sensitive data.
+- **Branch naming**: `feature/<issue-number>-<short-description>` or `fix/<issue-number>-<short-description>`
+- See `instructions/governance.instructions.md` for the full governance reference.

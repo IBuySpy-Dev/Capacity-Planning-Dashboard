@@ -14,6 +14,7 @@ handoffs:
     agent: strategy-to-automation
     prompt: Convert the manual test strategy above into automation candidates. Map the test paths to smoke tests, regression tiers, or agent specs as appropriate, and file GitHub Issues for each automation candidate.
     send: false
+allowed_skills: []
 ---
 
 # Manual Test Strategy Agent
