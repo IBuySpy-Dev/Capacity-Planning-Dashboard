@@ -67,16 +67,25 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Add runner IP to SQL firewall
+      - name: Open SQL firewall for runner
         run: |
           RUNNER_IP=$(curl -s https://api.ipify.org)
+          echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
+          echo "Enabling public network access..."
+          az sql server update \
+            --name "${{ env.SQL_SERVER }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --set publicNetworkAccess=Enabled \
+            --output none
           echo "Adding $RUNNER_IP to SQL firewall..."
           az sql server firewall-rule create \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --server "${{ env.SQL_SERVER }}" \
             --name "github-actions-runner-${{ github.run_id }}" \
             --start-ip-address "$RUNNER_IP" \
-            --end-ip-address "$RUNNER_IP"
+            --end-ip-address "$RUNNER_IP" \
+            --output none
+          echo "✓ SQL firewall opened for $RUNNER_IP"
 
       - name: Download DACPAC artifact
         uses: actions/download-artifact@v4
@@ -106,7 +115,7 @@ jobs:
             /p:CreateNewDatabase=false \
             /p:DropObjectsNotInSource=false
 
-      - name: Remove runner IP from SQL firewall
+      - name: Close SQL firewall
         if: always()
         run: |
           az sql server firewall-rule delete \
@@ -114,3 +123,9 @@ jobs:
             --server "${{ env.SQL_SERVER }}" \
             --name "github-actions-runner-${{ github.run_id }}" \
             --yes 2>/dev/null || true
+          az sql server update \
+            --name "${{ env.SQL_SERVER }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --set publicNetworkAccess=Disabled \
+            --output none 2>/dev/null || true
+          echo "✓ SQL firewall closed"
