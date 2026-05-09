@@ -67,15 +67,31 @@ jobs:
 
   # ── Job 2: Deploy ─────────────────────────────────────────────────────────────
   # Runs only after tests pass. Handles both push and workflow_dispatch triggers.
+  # Skips gracefully when AZURE_WEBAPP_NAME is not set (infra not yet provisioned).
   deploy:
     name: Deploy to Azure
     needs: build-and-test
+    if: ${{ vars.AZURE_WEBAPP_NAME != '' }}
     runs-on: ubuntu-latest
     environment: production
     permissions:
       contents: read
       id-token: write   # Required for OIDC — do NOT remove or weaken
     steps:
+      - name: Preflight — verify required vars
+        run: |
+          missing=()
+          [ -z "${{ vars.AZURE_CLIENT_ID }}" ]       && missing+=("AZURE_CLIENT_ID")
+          [ -z "${{ vars.AZURE_TENANT_ID }}" ]       && missing+=("AZURE_TENANT_ID")
+          [ -z "${{ vars.AZURE_SUBSCRIPTION_ID }}" ] && missing+=("AZURE_SUBSCRIPTION_ID")
+          [ -z "${{ vars.AZURE_RESOURCE_GROUP }}" ]  && missing+=("AZURE_RESOURCE_GROUP")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "❌ Missing required GitHub vars: ${missing[*]}"
+            echo "Run bootstrap (setup-infrastructure.yml) or bicep-deploy.yml to populate these."
+            exit 1
+          fi
+          echo "✓ All required vars present"
+
       - name: Checkout code
         uses: actions/checkout@v4
 
