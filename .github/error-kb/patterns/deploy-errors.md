@@ -140,3 +140,107 @@ jobs:
 3. Optionally also create `MY_VAR` under **Settings > Environments > [env-name] > Variables** to allow env-specific overrides during job execution
 
 **Verified:** `deploy.yml` preflight job, PR #71, May 2026.
+
+---
+
+## Azure App Service: Site returns 503 / Application Error
+
+**Error ID:** `appservice-503-application-error`
+
+**Signal:**
+
+```
+HTTP 503 Service Unavailable
+Application Error — An error occurred while starting the application.
+```
+
+Or the site loads a default Azure "App Service" placeholder page instead of your app.
+
+**Decision tree:**
+
+```
+503 after deploy?
+├─ Yes → check deployment logs first
+│   └─ az webapp log deployment show --name <app> --resource-group <rg>
+├─ Site never loads (not after deploy) → check if app process crashed
+│   └─ az webapp log tail --name <app> --resource-group <rg>
+└─ Intermittent / occasional → check health check endpoint and slot state
+```
+
+**Step 1 — Stream live logs**
+
+```bash
+az webapp log tail \
+  --name <app-name> \
+  --resource-group <resource-group>
+```
+
+Look for:
+- `Error: Cannot find module` → missing dependency, `npm install` didn't run
+- `EADDRINUSE` → port conflict; ensure app listens on `process.env.PORT`
+- `getaddrinfo ENOTFOUND` → wrong DATABASE_SERVER or connection string
+- `Login failed for user` → database credentials wrong in App Settings
+- Exit code immediately after start → unhandled error in startup path
+
+**Step 2 — Check App Settings (environment variables)**
+
+```bash
+az webapp config appsettings list \
+  --name <app-name> \
+  --resource-group <resource-group> \
+  --output table
+```
+
+Verify all required variables are present. A missing `SESSION_SECRET`, `DATABASE_SERVER`,
+or `AZURE_CLIENT_ID` will cause silent startup failures.
+
+**Step 3 — Restart vs. redeploy decision**
+
+| Situation | Action |
+|---|---|
+| App crashed after a bad deploy | Redeploy previous known-good artifact |
+| Config/env var changed | Restart only: `az webapp restart --name <app> --resource-group <rg>` |
+| Transient crash (OOM, timeout) | Restart only |
+| Dependency missing (`Cannot find module`) | Redeploy — restart won't fix missing node_modules |
+| Wrong startup command | Update `az webapp config set --startup-file` then restart |
+
+**Step 4 — Restart**
+
+```bash
+az webapp restart \
+  --name <app-name> \
+  --resource-group <resource-group>
+```
+
+Wait 30–60s then test the health endpoint.
+
+**Step 5 — Verify health endpoint**
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" https://<app-name>.azurewebsites.net/health
+```
+
+Expected: `200`. If still failing, redeploy from last known-good release.
+
+**Step 6 — Redeploy last known-good**
+
+```bash
+# Re-trigger the last successful deploy workflow run
+gh run rerun <run-id> --repo OWNER/REPO
+
+# Or deploy a specific image/artifact manually
+az webapp deployment source config-zip \
+  --name <app-name> \
+  --resource-group <resource-group> \
+  --src <artifact.zip>
+```
+
+**Prevention:**
+
+- Add a `/health` endpoint that returns `200` with `{ "status": "ok" }` — App Service can
+  use this as the health check probe (`az webapp config set --generic-configurations`)
+- Set `WEBSITE_NODE_DEFAULT_VERSION` App Setting to match local Node version
+- Ensure `npm install --production` (or equivalent) runs as part of the deploy step,
+  not just `npm ci` in CI — the app needs its deps in the deployed artifact
+
+**Verified:** Deploy workflow, site down incidents May 2026.

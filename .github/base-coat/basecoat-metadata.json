@@ -36,7 +36,8 @@
         "manual-test-strategy",
         "exploratory-charter",
         "strategy-to-automation",
-        "repo-health-auditor"
+        "repo-health-auditor",
+        "governance-bootstrapper"
       ]
     },
     "DevOps": {
@@ -654,6 +655,28 @@
       "file": "agents/repo-health-auditor.agent.md",
       "model": "Claude Haiku 4.5",
       "argumentHint": "/basecoat health audit OWNER/REPO"
+    },
+    {
+      "name": "governance-bootstrapper",
+      "description": "Scaffolds missing governance files and enables branch protection in one pass. Creates CODEOWNERS, PR template, issue templates, .env.example, and configures branch protection via the GitHub API. Run after a repo-health audit surfaces governance gaps.",
+      "category": "Quality",
+      "keywords": [
+        "governance",
+        "codeowners",
+        "branch-protection",
+        "templates",
+        "env-example",
+        "bootstrap",
+        "gov-bootstrap"
+      ],
+      "aliases": [
+        "governance",
+        "gov-bootstrap"
+      ],
+      "pairedSkill": "governance-bootstrap",
+      "file": "agents/governance-bootstrapper.agent.md",
+      "model": "Claude Haiku 4.5",
+      "argumentHint": "/basecoat governance bootstrap OWNER/REPO --team @org/platform"
     }
   ]
 }

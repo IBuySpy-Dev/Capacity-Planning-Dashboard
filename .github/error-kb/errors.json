@@ -59,5 +59,108 @@
     "successRate": 1.0,
     "firstSeenAt": "2026-05-09",
     "lastMatchedAt": "2026-05-09"
+  },
+  {
+    "id": "appservice-503-application-error",
+    "category": "known-fix",
+    "signature": "503 Service Unavailable|Application Error.*starting the application|EADDRINUSE|Cannot find module.*node_modules",
+    "scope": {
+      "tool": "Azure App Service",
+      "command": "az webapp"
+    },
+    "cause": "App Service 503s most commonly result from: missing env vars (silent startup crash), missing node_modules in deployed artifact, wrong PORT binding (app must use process.env.PORT), or a transient OOM/timeout.",
+    "resolution": [
+      "Stream live logs: 'az webapp log tail --name <app> --resource-group <rg>'",
+      "Check App Settings for missing required vars: 'az webapp config appsettings list'",
+      "Restart for config/transient issues: 'az webapp restart'",
+      "Redeploy for missing dependency issues (restart alone will not fix)",
+      "Verify health endpoint returns 200 after recovery"
+    ],
+    "antiPattern": "Restarting the app when the issue is a missing dependency (Cannot find module)",
+    "correctPattern": "Triage via log tail first, then decide restart vs. redeploy based on error signal",
+    "successRate": 0.9,
+    "firstSeenAt": "2026-05-09",
+    "lastMatchedAt": "2026-05-09"
+  },
+  {
+    "id": "git-push-403-wrong-remote",
+    "category": "environmental",
+    "signature": "remote: Permission to.*denied|The requested URL returned error: 403",
+    "scope": {
+      "tool": "git",
+      "command": "git push"
+    },
+    "cause": "In fork+upstream setups, 'origin' points to the personal fork (read-only for the org) and 'upstream' points to the org repo. Pushing to 'origin' returns 403 when the token doesn't have write access to the fork owner's account.",
+    "resolution": [
+      "Run 'git remote -v' to identify which remote is origin vs upstream",
+      "Push to 'upstream': 'git push upstream <branch>'",
+      "Create the PR against the upstream repo: 'gh pr create --repo ORG/REPO'",
+      "Never assume 'origin' is the push target in enterprise fork workflows"
+    ],
+    "antiPattern": "git push origin <branch> when origin=personal-fork and target is org repo",
+    "correctPattern": "git push upstream <branch> && gh pr create --repo ORG/REPO",
+    "successRate": 1.0,
+    "firstSeenAt": "2026-05-09",
+    "lastMatchedAt": "2026-05-09"
+  }
+]
+    "category": "known-fix",
+    "signature": "Unrecognized command line argument 'publish'.*Missing required argument '<Action>'",
+    "scope": {
+      "tool": "sqlpackage",
+      "command": "sqlpackage publish",
+      "installer": "dotnet tool install -g microsoft.sqlpackage"
+    },
+    "cause": "dotnet tool install -g microsoft.sqlpackage installs a version that uses legacy /Action flag syntax, not the newer 'publish' subcommand style.",
+    "resolution": [
+      "Change 'sqlpackage publish \\' to 'sqlpackage /Action:Publish \\'",
+      "Pass parameters as /SourceFile, /TargetServerName, /TargetDatabaseName, /TargetUser, /TargetPassword",
+      "Re-run the workflow"
+    ],
+    "antiPattern": "sqlpackage publish \\",
+    "correctPattern": "sqlpackage /Action:Publish \\",
+    "successRate": 1.0,
+    "firstSeenAt": "2026-05-09",
+    "lastMatchedAt": "2026-05-09"
+  },
+  {
+    "id": "azure-sql-deny-public-endpoint",
+    "category": "environmental",
+    "signature": "DenyPublicEndpointEnabled|The operation could not complete.*public network access.*disabled",
+    "scope": {
+      "tool": "az sql server firewall-rule create",
+      "command": "az sql server firewall-rule create"
+    },
+    "cause": "Azure SQL Server has publicNetworkAccess=Disabled. Firewall rules cannot be added while public network access is globally disabled on the server — even with correct RBAC.",
+    "resolution": [
+      "Run 'az sql server update --name <server> --resource-group <rg> --set publicNetworkAccess=Enabled' BEFORE adding the firewall rule",
+      "Then add the firewall rule as normal",
+      "In cleanup (if: always()), delete the firewall rule AND restore publicNetworkAccess=Disabled"
+    ],
+    "antiPattern": "az sql server firewall-rule create (without first enabling publicNetworkAccess)",
+    "correctPattern": "az sql server update --set publicNetworkAccess=Enabled && az sql server firewall-rule create",
+    "successRate": 1.0,
+    "firstSeenAt": "2026-05-09",
+    "lastMatchedAt": "2026-05-09"
+  },
+  {
+    "id": "github-actions-job-if-env-var-scope",
+    "category": "known-fix",
+    "signature": "Job.*skipped.*condition.*always.*false|deploy job.*not run.*if.*vars\\.",
+    "scope": {
+      "tool": "GitHub Actions",
+      "command": "job-level if:"
+    },
+    "cause": "Job-level if: conditions are evaluated BEFORE the environment: block loads. Environment-scoped variables and secrets are unavailable in job guards — they evaluate to empty string, making the guard always false.",
+    "resolution": [
+      "Set the variable at REPOSITORY level (Settings > Secrets and variables > Actions > Variables), not only at the environment level",
+      "Environment-scoped value can still override the repo-level value during execution",
+      "Job if: guard reads the repo-level value; steps inside the job use the environment-level value"
+    ],
+    "antiPattern": "if: ${{ vars.MY_VAR != '' }} with MY_VAR set only in the environment (not repo)",
+    "correctPattern": "Set MY_VAR at repo level for guard visibility; optionally also set at env level for env-specific override",
+    "successRate": 1.0,
+    "firstSeenAt": "2026-05-09",
+    "lastMatchedAt": "2026-05-09"
   }
 ]
