@@ -23,13 +23,82 @@
  */
 
 const { ConfidentialClientApplication } = require('@azure/msal-node');
+const { createRemoteJWKSet, jwtVerify } = require('jose');
 const crypto = require('crypto');
 
 const AUTH_ENABLED = (process.env.AUTH_ENABLED || 'false').toLowerCase() === 'true';
 const ADMIN_GROUP_ID = (process.env.ADMIN_GROUP_ID || '').trim();
 const ENTRA_TENANT_ID = (process.env.ENTRA_TENANT_ID || '').trim();
+const ENTRA_CLIENT_ID = (process.env.ENTRA_CLIENT_ID || '').trim();
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const OAUTH_STATE_MAX_PENDING = 5;
+
+// ---------------------------------------------------------------------------
+// M2M Bearer token support (Entra ID / Azure AD v2 tokens)
+//
+// Service principals, managed identities, and CI/CD pipelines can call the
+// API using a Bearer token obtained via the client-credentials flow:
+//
+//   POST https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token
+//     client_id     = <SPN app ID>
+//     client_secret = <SPN secret>  (or certificate / federated credential)
+//     scope         = api://<ENTRA_CLIENT_ID>/.default
+//     grant_type    = client_credentials
+//
+// The resulting access_token is passed as:  Authorization: Bearer <token>
+//
+// App Roles are defined in the API's app registration manifest and assigned
+// to the calling SPN.  The token's `roles` claim carries the granted roles.
+// Use requireRole('RoleName') to enforce a specific role on any route.
+//
+// Required env vars (all already present in .env.sample):
+//   ENTRA_TENANT_ID   – Azure AD tenant GUID
+//   ENTRA_CLIENT_ID   – This application's client/app ID
+// ---------------------------------------------------------------------------
+
+let _jwks = null;
+
+/** Lazy-initialises and returns the remote JWKS key set (cached per process). */
+function getJwks() {
+  if (_jwks) return _jwks;
+  if (!ENTRA_TENANT_ID) return null;
+  _jwks = createRemoteJWKSet(
+    new URL(`https://login.microsoftonline.com/${ENTRA_TENANT_ID}/discovery/v2.0/keys`)
+  );
+  return _jwks;
+}
+
+/**
+ * Extracts and validates the Bearer token from the Authorization header.
+ * Returns the JWT payload on success, or null if no token is present or
+ * validation fails.
+ *
+ * @param {import('express').Request} req
+ * @returns {Promise<object|null>}
+ */
+async function verifyBearerToken(req) {
+  const authHeader = req.headers.authorization || '';
+  if (!authHeader.toLowerCase().startsWith('bearer ')) return null;
+  const token = authHeader.slice(7).trim();
+  if (!token) return null;
+
+  const jwks = getJwks();
+  if (!jwks) {
+    console.warn('[auth:bearer] ENTRA_TENANT_ID not configured — cannot validate Bearer tokens');
+    return null;
+  }
+
+  try {
+    const { payload } = await jwtVerify(token, jwks, {
+      audience: `api://${ENTRA_CLIENT_ID}`,
+      issuer: `https://login.microsoftonline.com/${ENTRA_TENANT_ID}/v2.0`
+    });
+    return payload;
+  } catch (err) {
+    console.warn('[auth:bearer] token validation failed:', err.message);
+    return null;
+  }
+}
 
 let _msalClient = null;
 
@@ -182,12 +251,31 @@ function isAdmin(account) {
 /**
  * Middleware: require the user to be authenticated.
  * No-op when AUTH_ENABLED=false.
+ *
+ * Accepts either:
+ *  - A session cookie (browser / interactive sign-in flow), or
+ *  - An Entra ID Bearer token in the Authorization header (M2M / SPN callers).
+ *
  * API/internal paths return 401 JSON; browser paths redirect to /auth/login.
  */
 function requireAuth(req, res, next) {
   console.log(`[auth:requireAuth] path=${req.path}, AUTH_ENABLED=${AUTH_ENABLED}, hasAccount=${!!getAccountFromSession(req)}`);
   if (!AUTH_ENABLED) return next();
- if (getAccountFromSession(req)) return next();
+  if (getAccountFromSession(req)) return next();
+
+  // M2M path: validate Bearer token if present
+  const authHeader = req.headers.authorization || '';
+  if (authHeader.toLowerCase().startsWith('bearer ')) {
+    verifyBearerToken(req).then((payload) => {
+      if (payload) {
+        req.bearerPayload = payload;
+        return next();
+      }
+      return res.status(401).json({ ok: false, error: 'Invalid or expired Bearer token.' });
+    }).catch(() => res.status(401).json({ ok: false, error: 'Authentication required.' }));
+    return;
+  }
+
   if (req.path.startsWith('/api/') || req.path.startsWith('/internal/')) {
     return res.status(401).json({ ok: false, error: 'Authentication required.' });
   }
@@ -199,9 +287,19 @@ function requireAuth(req, res, next) {
 /**
  * Middleware: require the user to be a member of ADMIN_GROUP_ID.
  * No-op when AUTH_ENABLED=false or ADMIN_GROUP_ID is not configured.
+ *
+ * For Bearer token callers, checks the `roles` claim for 'Admin'.
  */
 function requireAdmin(req, res, next) {
   if (!AUTH_ENABLED || !ADMIN_GROUP_ID) return next();
+
+  // M2M path: check roles claim from Bearer token
+  if (req.bearerPayload) {
+    const roles = Array.isArray(req.bearerPayload.roles) ? req.bearerPayload.roles : [];
+    if (roles.includes('Admin')) return next();
+    return res.status(403).json({ ok: false, error: 'Admin role required.' });
+  }
+
   const account = getAccountFromSession(req);
   if (!account) {
     return res.status(401).json({ ok: false, error: 'Authentication required.' });
@@ -210,6 +308,35 @@ function requireAdmin(req, res, next) {
     return res.status(403).json({ ok: false, error: 'Admin group membership required.' });
   }
   return next();
+}
+
+/**
+ * Middleware factory: require a specific App Role in the Bearer token's
+ * `roles` claim (M2M callers only).  Session-cookie users are passed through
+ * — use requireAdmin for group-based admin gating.
+ *
+ * Example:
+ *   router.delete('/resource/:id', requireAuth, requireRole('DataWriter'), handler);
+ *
+ * @param {string} role – the App Role name defined in the app registration.
+ */
+function requireRole(role) {
+  return function roleMiddleware(req, res, next) {
+    if (!AUTH_ENABLED) return next();
+
+    // Session-cookie callers are not subject to role-based gating here
+    if (getAccountFromSession(req)) return next();
+
+    const payload = req.bearerPayload;
+    if (!payload) {
+      return res.status(401).json({ ok: false, error: 'Authentication required.' });
+    }
+    const roles = Array.isArray(payload.roles) ? payload.roles : [];
+    if (!roles.includes(role)) {
+      return res.status(403).json({ ok: false, error: `App Role '${role}' required.` });
+    }
+    return next();
+  };
 }
 
 /** Creates and returns the Express router for /auth/* routes. */
@@ -373,6 +500,8 @@ module.exports = {
   buildAuthRouter,
   requireAuth,
   requireAdmin,
+  requireRole,
+  verifyBearerToken,
   getAccountFromSession,
   isAdmin
 };
