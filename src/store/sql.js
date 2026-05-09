@@ -716,8 +716,18 @@ async function ensureDashboardErrorLogSchema(pool) {
         affectedDesiredCount INT NULL,
         isResolved BIT NOT NULL DEFAULT 0,
         resolvedAtUtc DATETIME2 NULL,
-        resolutionNotes NVARCHAR(512) NULL
+        resolutionNotes NVARCHAR(512) NULL,
+        requestId NVARCHAR(36) NULL
       )
+    END;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM sys.columns
+      WHERE object_id = OBJECT_ID('dbo.DashboardErrorLog')
+        AND name = 'requestId'
+    )
+    BEGIN
+      ALTER TABLE dbo.DashboardErrorLog ADD requestId NVARCHAR(36) NULL;
     END;
   `;
 
@@ -769,13 +779,14 @@ async function insertDashboardErrorLog(entry = {}) {
   request.input('affectedRegion', sql.NVarChar(64), entry.region || null);
   request.input('affectedSku', sql.NVarChar(128), entry.sku || null);
   request.input('affectedDesiredCount', sql.Int, Number.isFinite(entry.desiredCount) ? entry.desiredCount : null);
+  request.input('requestId', sql.NVarChar(36), entry.requestId || null);
 
   try {
     await request.query(`
       INSERT INTO dbo.DashboardErrorLog
-      (errorSource, errorType, errorMessage, stackTrace, occurredAtUtc, severity, context, affectedRegion, affectedSku, affectedDesiredCount, isResolved)
+      (errorSource, errorType, errorMessage, stackTrace, occurredAtUtc, severity, context, affectedRegion, affectedSku, affectedDesiredCount, isResolved, requestId)
       VALUES
-      (@errorSource, @errorType, @errorMessage, @stackTrace, @occurredAtUtc, @severity, @context, @affectedRegion, @affectedSku, @affectedDesiredCount, 0)
+      (@errorSource, @errorType, @errorMessage, @stackTrace, @occurredAtUtc, @severity, @context, @affectedRegion, @affectedSku, @affectedDesiredCount, 0, @requestId)
     `);
     return 1;
   } catch (err) {
@@ -830,7 +841,8 @@ async function listDashboardErrorLogs(options = {}) {
       affectedDesiredCount,
       isResolved,
       resolvedAtUtc,
-      resolutionNotes
+      resolutionNotes,
+      requestId
     FROM dbo.DashboardErrorLog
     ${where}
     ORDER BY occurredAtUtc DESC, errorLogId DESC
@@ -860,7 +872,8 @@ async function listDashboardErrorLogs(options = {}) {
       desiredCount: row.affectedDesiredCount == null ? null : Number(row.affectedDesiredCount),
       isResolved: Boolean(row.isResolved),
       resolvedAtUtc: row.resolvedAtUtc,
-      resolutionNotes: row.resolutionNotes
+      resolutionNotes: row.resolutionNotes,
+      requestId: row.requestId || null
     };
   });
 }

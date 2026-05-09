@@ -394,6 +394,15 @@ function sendErrorResponse(res, {
   const requestId = randomUUID();
   if (err) {
     console.error(`[${scope}] [${requestId}]`, err);
+    // Fire-and-forget: persist to DashboardErrorLog so operators can look up the Ref ID in the admin UI.
+    insertDashboardErrorLog({
+      source: scope,
+      type: err.constructor?.name || 'Error',
+      message: err.message || clientMessage,
+      stack: err.stack || null,
+      severity: status >= 500 ? 'error' : 'warn',
+      requestId
+    }).catch(() => { /* suppress — logging must never break the response path */ });
   }
 
   const payload = {
@@ -2232,6 +2241,70 @@ app.get('/api/capacity/subscriptions', async (req, res) => {
   } catch (err) {
     sendErrorResponse(res, { clientMessage: 'Failed to retrieve subscription summary.', err, scope: 'api/capacity/subscriptions' });
   }
+});
+
+// ─── GET /api/admin/config ────────────────────────────────────────────────────
+// Returns a sanitized snapshot of app configuration for operator diagnostics.
+// Secrets are never returned verbatim — only "set" / "not set".
+
+app.get('/api/admin/config', requireAdmin, async (_req, res) => {
+  function secretStatus(value) {
+    return value ? 'set' : 'not set';
+  }
+
+  function countCsv(value) {
+    if (!value) return 0;
+    return String(value).split(',').map((v) => v.trim()).filter(Boolean).length;
+  }
+
+  const pool = await getSqlPool().catch(() => null);
+
+  res.json({
+    ok: true,
+    config: {
+      server: {
+        port: process.env.PORT || 3000,
+        nodeEnv: process.env.NODE_ENV || 'development'
+      },
+      auth: {
+        authEnabled: normalizeBoolean(process.env.AUTH_ENABLED),
+        entraClientId: secretStatus(process.env.ENTRA_CLIENT_ID),
+        entraClientSecret: secretStatus(process.env.ENTRA_CLIENT_SECRET),
+        entraRedirectUri: process.env.AUTH_REDIRECT_URI || null,
+        adminGroupId: secretStatus(process.env.ADMIN_GROUP_ID)
+      },
+      sql: {
+        server: process.env.SQL_SERVER || null,
+        database: process.env.SQL_DATABASE || null,
+        authMode: process.env.SQL_AUTH_MODE || 'msi',
+        poolReady: pool !== null
+      },
+      ingest: {
+        regionPreset: process.env.INGEST_REGION_PRESET || 'USMajor',
+        onStartup: normalizeBoolean(process.env.INGEST_ON_STARTUP),
+        intervalMinutes: normalizeIntervalMinutes(process.env.INGEST_INTERVAL_MINUTES),
+        subscriptionIds: `${countCsv(process.env.INGEST_SUBSCRIPTION_IDS)} configured`,
+        apiKey: secretStatus(process.env.INGEST_API_KEY),
+        aiEnabled: normalizeBoolean(process.env.INGEST_AI_ENABLED),
+        aiProviderQuotaEnabled: normalizeBoolean(process.env.INGEST_AI_PROVIDER_QUOTA_ENABLED),
+        aiModelCatalog: normalizeBoolean(process.env.INGEST_AI_MODEL_CATALOG, true)
+      },
+      quota: {
+        managementGroupId: secretStatus(process.env.QUOTA_MANAGEMENT_GROUP_ID)
+      },
+      capacityWorker: {
+        baseUrl: process.env.CAPACITY_WORKER_BASE_URL || null,
+        sharedSecret: secretStatus(process.env.CAPACITY_WORKER_SHARED_SECRET),
+        timeoutMs: normalizeIntervalMinutes(process.env.CAPACITY_WORKER_TIMEOUT_MS) || 60000
+      },
+      livePlacement: {
+        refreshOnStartup: normalizeBoolean(process.env.LIVE_PLACEMENT_REFRESH_ON_STARTUP),
+        refreshIntervalMinutes: normalizeIntervalMinutes(process.env.LIVE_PLACEMENT_REFRESH_INTERVAL_MINUTES),
+        regionPreset: process.env.LIVE_PLACEMENT_REFRESH_REGION_PRESET || 'USMajor',
+        subscriptionIds: `${countCsv(process.env.LIVE_PLACEMENT_REFRESH_SUBSCRIPTION_IDS)} configured`
+      }
+    }
+  });
 });
 
 app.get('/api/admin/sql-preview', requireAdmin, async (req, res) => {

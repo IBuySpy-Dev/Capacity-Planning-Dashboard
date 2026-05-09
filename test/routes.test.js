@@ -128,3 +128,35 @@ test('GET /api/subscriptions does not return 401 when AUTH_ENABLED is false', as
   const res = await request(app).get('/api/subscriptions');
   assert.notEqual(res.status, 401);
 });
+
+// ─── GET /api/admin/config ────────────────────────────────────────────────────
+
+test('GET /api/admin/config returns 200 with sanitized config shape when AUTH_ENABLED is false', async () => {
+  const res = await request(app).get('/api/admin/config');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.ok, true);
+
+  const { config } = res.body;
+  assert.ok(config, 'response body should have a config object');
+
+  // Top-level sections present
+  assert.ok(config.server, 'config.server section should be present');
+  assert.ok(config.auth, 'config.auth section should be present');
+  assert.ok(config.sql, 'config.sql section should be present');
+  assert.ok(config.ingest, 'config.ingest section should be present');
+  assert.ok(config.quota, 'config.quota section should be present');
+  assert.ok(config.livePlacement, 'config.livePlacement section should be present');
+
+  // Secrets must never be returned verbatim — only "set" or "not set"
+  const ALLOWED_SECRET_VALUES = new Set(['set', 'not set']);
+  assert.ok(ALLOWED_SECRET_VALUES.has(config.auth.entraClientSecret), 'entraClientSecret must be "set" or "not set"');
+  assert.ok(ALLOWED_SECRET_VALUES.has(config.auth.adminGroupId), 'adminGroupId must be "set" or "not set"');
+  assert.ok(ALLOWED_SECRET_VALUES.has(config.ingest.apiKey), 'ingest.apiKey must be "set" or "not set"');
+  assert.ok(ALLOWED_SECRET_VALUES.has(config.quota.managementGroupId), 'quota.managementGroupId must be "set" or "not set"');
+
+  // sql.poolReady must be a boolean
+  assert.equal(typeof config.sql.poolReady, 'boolean', 'sql.poolReady must be a boolean');
+
+  // auth.authEnabled must be a boolean
+  assert.equal(typeof config.auth.authEnabled, 'boolean', 'auth.authEnabled must be a boolean');
+});
