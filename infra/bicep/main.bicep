@@ -57,14 +57,14 @@ param ingestApiKey string = ''
 @description('Session secret used by the dashboard web app session middleware. Leave empty when the secret already exists in Key Vault (capdash-session-secret); supply on first deploy or to rotate the value.')
 param sessionSecret string = ''
 
-@description('Optional subscription IDs where the dashboard web app managed identity should receive Reader access for subscription discovery and read-only ARM queries.')
-param webReaderSubscriptionIds array = []
+@description('Subscription IDs where the dashboard web app managed identity should receive Reader access for subscription discovery and read-only ARM queries. Defaults to the deployment subscription. Override to grant access across additional subscriptions.')
+param webReaderSubscriptionIds array = [subscription().subscriptionId]
 
-@description('Optional management group names where the dashboard web app managed identity should receive Reader access for subscription discovery and read-only ARM queries. Preferred for larger estates; keep subscription IDs for customers without management groups.')
+@description('Optional management group names where the dashboard web app managed identity should receive Reader access for subscription discovery and read-only ARM queries. Preferred for larger estates with multiple subscriptions under a management group. Leave empty to use webReaderSubscriptionIds instead.')
 param webReaderManagementGroupNames array = []
 
-@description('Optional subscription IDs where the dashboard web app managed identity should receive GroupQuota Request Operator for quota apply writes. Include every subscription that can participate in quota moves.')
-param webQuotaWriterSubscriptionIds array = []
+@description('Subscription IDs where the dashboard web app managed identity should receive GroupQuota Request Operator for quota apply writes. Defaults to the deployment subscription. Override to include every subscription that can participate in quota moves.')
+param webQuotaWriterSubscriptionIds array = [subscription().subscriptionId]
 
 @description('Optional management group names where the dashboard web app managed identity should receive GroupQuota Request Operator for quota apply writes. Preferred for larger estates; keep subscription IDs for customers without management groups.')
 param webQuotaWriterManagementGroupNames array = []
