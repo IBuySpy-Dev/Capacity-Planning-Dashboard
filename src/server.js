@@ -2312,7 +2312,21 @@ app.get('/api/admin/config', requireAdmin, async (_req, res) => {
       },
       appInsights: {
         configured: Boolean(process.env.APPLICATIONINSIGHTS_CONNECTION_STRING)
-      }
+      },
+      ingestion: (() => {
+        const s = getIngestionStatus();
+        let lastRunStatus = 'never';
+        if (s.lastRunUtc !== null) {
+          lastRunStatus = s.lastError ? 'error' : 'success';
+        }
+        return {
+          lastRunAt: s.lastRunUtc || null,
+          lastRunStatus,
+          lastRunRecords: s.lastSuccessUtc ? s.lastInsertedRows : null,
+          lastErrorMessage: s.lastError || null,
+          inProgress: s.inProgress
+        };
+      })()
     }
   });
 });
