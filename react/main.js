@@ -4301,10 +4301,17 @@ function App() {
         throw new Error(errorMessage);
       }
 
+      const truncated = response.headers.get('x-export-truncated') === 'true';
+      const totalRows = response.headers.get('x-export-total-rows');
       const blob = await response.blob();
       const filename = getFilenameFromDisposition(response.headers.get('content-disposition'), `capacity-dashboard-export.${normalizedFormat}`);
       triggerFileDownload(blob, filename);
-      setAppStatus({ tone: 'success', message: `Downloaded ${filename}.` });
+      if (truncated) {
+        const rowsNote = totalRows ? ` (${Number(totalRows).toLocaleString()} total rows exist)` : '';
+        setAppStatus({ tone: 'warn', message: `Downloaded ${filename} — export was capped at 50,000 rows${rowsNote}. Apply additional filters to narrow the result set.` });
+      } else {
+        setAppStatus({ tone: 'success', message: `Downloaded ${filename}.` });
+      }
     } catch (error) {
       setAppStatus({ tone: 'error', message: error.message || 'Failed to export capacity data.' });
     } finally {

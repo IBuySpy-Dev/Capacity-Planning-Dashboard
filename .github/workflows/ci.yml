@@ -1,0 +1,46 @@
+# CI Workflow — Pull Request Validation
+#
+# Triggers on every pull request targeting main.
+# Validates code by installing dependencies and running the full test suite.
+# No Azure credentials required — this is a read-only validation job.
+#
+# Required secrets / variables: none
+
+name: CI
+
+on:
+  pull_request:
+    branches: [ main ]
+
+# Minimum permissions — no id-token because no cloud access is needed here.
+permissions:
+  contents: read
+
+# Cancel in-progress CI runs for the same PR branch when a new push arrives.
+# This is safe for CI (no side effects) and avoids wasting runner minutes.
+concurrency:
+  group: ci-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Install & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run test suite
+        # Uses the built-in Node.js test runner (node --test).
+        # No separate build step — this is a pure JS project.
+        run: npm test

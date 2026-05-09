@@ -2,12 +2,12 @@
 param keyVaultName string
 
 @secure()
-@description('Shared secret used to authorize internal bootstrap and ingestion routes on the dashboard web app.')
-param ingestApiKey string
+@description('Shared secret used to authorize internal bootstrap and ingestion routes on the dashboard web app. Leave empty to skip writing (secret must already exist in Key Vault at capdash-ingest-api-key).')
+param ingestApiKey string = ''
 
 @secure()
-@description('Session secret used by the dashboard web app session middleware.')
-param sessionSecret string
+@description('Session secret used by the dashboard web app session middleware. Leave empty to skip writing (secret must already exist in Key Vault at capdash-session-secret).')
+param sessionSecret string = ''
 
 @secure()
 @description('Optional shared secret used between the dashboard web app and the worker function app.')
@@ -26,7 +26,7 @@ resource kv 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: keyVaultName
 }
 
-resource ingestApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource ingestApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(ingestApiKey)) {
   parent: kv
   name: ingestApiKeySecretName
   properties: {
@@ -34,7 +34,7 @@ resource ingestApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   }
 }
 
-resource sessionSecretResource 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource sessionSecretResource 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(sessionSecret)) {
   parent: kv
   name: sessionSecretSecretName
   properties: {

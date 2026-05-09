@@ -1,5 +1,18 @@
 name: Deploy Capacity Dashboard
 
+# Triggers: push to main (automatic) or manual via workflow_dispatch.
+#
+# Required GitHub Variables (non-secret — safe to store as vars):
+#   AZURE_CLIENT_ID       — Service principal app (client) ID for OIDC
+#   AZURE_TENANT_ID       — Entra tenant ID
+#   AZURE_SUBSCRIPTION_ID — Azure subscription GUID
+#
+# Required GitHub Secrets (sensitive resource identifiers):
+#   AZURE_WEBAPP_NAME     — App Service name (e.g. app-capdash-prod-prod01)
+#   AZURE_RESOURCE_GROUP  — Resource group (e.g. rg-capdash-prod)
+#
+# AZURE_CLIENT_SECRET must NEVER be stored — OIDC only (policy requirement).
+
 on:
   push:
     branches: [ main ]
@@ -15,106 +28,137 @@ on:
           - staging
           - prod
 
+# cancel-in-progress: false — MANDATORY because this workflow runs DB migrations.
+# Cancelling a workflow mid-migration can leave the database in a partially
+# applied state. All concurrent deploys queue behind the running one instead.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 env:
-  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-  AZURE_WEBAPP_NAME: 'app-capdash-prod-prod01'
-  AZURE_LOCATION: 'westus2'
+  NODE_VERSION: '22'
+  AZURE_WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
+  AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
 
 jobs:
+  # ── Job 1: Validate ──────────────────────────────────────────────────────────
+  # Runs for all triggers. Fails fast before any cloud interaction.
   build-and-test:
+    name: Build & Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
       - name: Run tests
+        # Node.js built-in test runner (node --test). No compile step needed.
         run: npm test
 
+  # ── Job 2: Deploy ─────────────────────────────────────────────────────────────
+  # Runs only after tests pass. Handles both push and workflow_dispatch triggers.
   deploy:
+    name: Deploy to Azure
     needs: build-and-test
     runs-on: ubuntu-latest
     environment: production
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
-      id-token: write
+      id-token: write   # Required for OIDC — do NOT remove or weaken
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
+      # OIDC login — no long-lived credential stored anywhere.
+      # azure/login@v2 is required by security policy; do not upgrade to v3+
+      # without updating the federated credential configuration in Entra.
       - name: Azure Login (OIDC)
-        uses: azure/login@v3
+        uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
-
       - name: Install production dependencies
-        run: npm ci --production
+        # --omit=dev excludes devDependencies from node_modules in the package.
+        run: npm ci --omit=dev
+
+      - name: Verify critical deployment assets
+        # tools/ PowerShell scripts are loaded at runtime by the app.
+        # Abort deploy now if they are missing rather than fail silently in prod.
+        shell: pwsh
+        run: |
+          $required = @(
+            'tools/Get-AzVMAvailability/Get-AzVMAvailability.ps1',
+            'tools/Get-AzPaaSAvailability/Get-AzPaaSAvailability.ps1'
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path $path)) {
+              Write-Host "FATAL: Required asset missing: $path" -ForegroundColor Red
+              exit 1
+            }
+          }
+          Write-Host "✓ All critical assets present" -ForegroundColor Green
 
       - name: Create deployment package
+        # File manifest mirrors deploy-web-app.ps1 — keep in sync with that script.
         run: |
           mkdir -p deployment
-          cp package.json deployment/
-          cp package-lock.json deployment/ 2>/dev/null || true
-          cp server.js deployment/
-          cp app.js deployment/
-          cp index.html deployment/
-          cp styles.css deployment/
-          cp web.config deployment/ 2>/dev/null || true
-          cp -r node_modules deployment/ 2>/dev/null || true
-          cp -r react deployment/ 2>/dev/null || true
-          cp -r src deployment/ 2>/dev/null || true
-          cp -r sql deployment/ 2>/dev/null || true
-          cp -r docs deployment/ 2>/dev/null || true
-          cp -r infra deployment/ 2>/dev/null || true
-          cp -r tools deployment/ 2>/dev/null || true
-          cp -r scripts deployment/ 2>/dev/null || true
+
+          # Individual root files
+          for f in app.js index.html server.js web.config styles.css sku-catalog.js \
+                   package.json package-lock.json; do
+            [ -f "$f" ] && cp "$f" deployment/ || echo "WARN: $f not found, skipping"
+          done
+
+          # Directories (sql/ and scripts/ carry migrations and helper scripts)
+          for d in src sql scripts tools react; do
+            [ -d "$d" ] && cp -r "$d" deployment/ || echo "WARN: $d/ not found, skipping"
+          done
+
+          # Production node_modules (installed above with --omit=dev)
+          cp -r node_modules deployment/
+
           cd deployment
           zip -r ../deployment.zip .
+          echo "✓ Package created ($(du -sh ../deployment.zip | cut -f1))"
 
       - name: Clear stale Run-From-Package state
+        # OneDeploy stores a zip in SitePackages/ and a packagename.txt pointer.
+        # On each restart the host tries to mount the zip; when it fails it writes
+        # a sentinel that aborts startup. Clear both so the host exits
+        # package-mount mode fully before the new zip lands.
         run: |
-          # OneDeploy (webapps-deploy@v3 default) stores a zip in SitePackages/ and
-          # creates a packagename.txt pointer. On each restart the host tries to mount
-          # the zip; when it fails it creates a sentinel that aborts startup.
-          # We clear BOTH the sentinel and the SitePackages pointer so the host stops
-          # attempting package-mount mode entirely.
           CREDS=$(az webapp deployment list-publishing-credentials \
-            --name ${{ env.AZURE_WEBAPP_NAME }} \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --subscription ${{ env.AZURE_SUBSCRIPTION_ID }} \
+            --name "${{ env.AZURE_WEBAPP_NAME }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --subscription "${{ vars.AZURE_SUBSCRIPTION_ID }}" \
             --query "{u:publishingUserName,p:publishingPassword}" -o json)
           PUB_USER=$(echo "$CREDS" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['u'])")
           PUB_PASS=$(echo "$CREDS" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['p'])")
           SCM="https://${{ env.AZURE_WEBAPP_NAME }}.scm.azurewebsites.net"
           AUTH="-u $PUB_USER:$PUB_PASS"
 
-          # 1. Delete the startup-abort sentinel in wwwroot
           S1=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
             "$SCM/api/vfs/site/wwwroot/FAILED%20TO%20INITIALIZE%20RUN%20FROM%20PACKAGE.txt" $AUTH)
           echo "Sentinel DELETE: $S1"
 
-          # 2. Delete the SitePackages pointer file (tells host which zip to mount)
           S2=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
             "$SCM/api/vfs/data/SitePackages/" $AUTH)
           echo "SitePackages DELETE: $S2"
@@ -127,85 +171,122 @@ jobs:
           resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
           deployment-method: zipDeploy
 
+      # ── SQL steps ─────────────────────────────────────────────────────────────
+      # go-sqlcmd supports ActiveDirectoryDefault — uses the OIDC-acquired
+      # Azure CLI credentials from the azure/login step above.
       - name: Install sqlcmd
         run: |
-          # Install go-sqlcmd (supports ActiveDirectoryDefault auth for CI/CD)
           VERSION=$(curl -sSL https://api.github.com/repos/microsoft/go-sqlcmd/releases/latest \
             | python3 -c "import sys,json;print(json.load(sys.stdin)['tag_name'])")
           curl -sSL "https://github.com/microsoft/go-sqlcmd/releases/download/${VERSION}/sqlcmd-linux-amd64.tar.bz2" \
             | sudo tar -xj -C /usr/local/bin sqlcmd
           sqlcmd --version
 
-      - name: Open SQL firewall for deployment
+      - name: Open SQL firewall for runner
+        # Temporarily allows the GitHub Actions runner IP through the SQL firewall.
+        # Closed again in the always() step below regardless of success or failure.
         run: |
-          SQL_SERVER="sql-capdash-prod-prod01"
+          APP="${{ env.AZURE_WEBAPP_NAME }}"
+          ENV_PART=$(echo "$APP" | cut -d'-' -f3)
+          SUFFIX=$(echo "$APP" | cut -d'-' -f4)
+          SQL_SERVER="sql-capdash-${ENV_PART}-${SUFFIX}"
+          echo "SQL_SERVER=$SQL_SERVER" >> "$GITHUB_ENV"
+
           RUNNER_IP=$(curl -sSL https://api.ipify.org)
-          echo "Runner IP: $RUNNER_IP"
+          echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
+
           az sql server update \
-            --name $SQL_SERVER \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name "$SQL_SERVER" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
             --set publicNetworkAccess=Enabled \
             --output none
           az sql server firewall-rule create \
             --name github-actions-temp \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --server $SQL_SERVER \
-            --start-ip-address $RUNNER_IP \
-            --end-ip-address $RUNNER_IP \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --server "$SQL_SERVER" \
+            --start-ip-address "$RUNNER_IP" \
+            --end-ip-address "$RUNNER_IP" \
             --output none
           echo "✓ SQL firewall opened for $RUNNER_IP"
 
-      - name: Bootstrap SQL Database for Managed Identity
+      - name: Bootstrap SQL managed identity
         shell: pwsh
         run: |
-          # Extract SQL server and database names from resource naming pattern
-          # Pattern: app-capdash-{environment}-{workloadSuffix}
           $appName = "${{ env.AZURE_WEBAPP_NAME }}"
-          
-          # Parse naming convention: app-capdash-PROD-PROD01
-          $parts = $appName -split '-'
-          $environment = $parts[2]  # 'prod'
-          $workloadSuffix = $parts[3]  # 'prod01'
-          
-          $sqlServerName = "sql-capdash-$environment-$workloadSuffix"
+          $parts   = $appName -split '-'
+          $environment    = $parts[2]
+          $workloadSuffix = $parts[3]
+
+          $sqlServerName   = "sql-capdash-$environment-$workloadSuffix"
           $sqlDatabaseName = "sqldb-capdash-$environment"
-          
-          Write-Host "Bootstrapping SQL Database..."
-          Write-Host "  SQL Server: $sqlServerName"
-          Write-Host "  Database: $sqlDatabaseName"
-          
-          # Execute bootstrap script with error handling
-          try {
-            & ./scripts/bootstrap-sql-managed-identity.ps1 `
-              -AppServiceName "${{ env.AZURE_WEBAPP_NAME }}" `
-              -SqlServerName $sqlServerName `
-              -SqlDatabaseName $sqlDatabaseName `
-              -ResourceGroup "${{ env.AZURE_RESOURCE_GROUP }}" `
-              -SubscriptionId "${{ env.AZURE_SUBSCRIPTION_ID }}"
-            
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "ERROR: SQL bootstrap script failed with exit code $LASTEXITCODE" -ForegroundColor Red
-              exit 1
-            }
-            Write-Host "✓ SQL bootstrap completed successfully" -ForegroundColor Green
-          }
-          catch {
-            Write-Host "ERROR: SQL bootstrap failed - $_" -ForegroundColor Red
+
+          Write-Host "SQL Server:   $sqlServerName"
+          Write-Host "SQL Database: $sqlDatabaseName"
+
+          & ./scripts/bootstrap-sql-managed-identity.ps1 `
+            -AppServiceName   "${{ env.AZURE_WEBAPP_NAME }}" `
+            -SqlServerName    $sqlServerName `
+            -SqlDatabaseName  $sqlDatabaseName `
+            -ResourceGroup    "${{ env.AZURE_RESOURCE_GROUP }}" `
+            -SubscriptionId   "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "ERROR: SQL bootstrap failed (exit $LASTEXITCODE)" -ForegroundColor Red
             exit 1
           }
+          Write-Host "✓ SQL bootstrap complete" -ForegroundColor Green
 
-      - name: Close SQL firewall after deployment
+      # DB migration step — the cancel-in-progress: false concurrency guard above
+      # ensures this step is never interrupted mid-run. Migrations in sql/migrations/
+      # are applied in filename order. Each file must be idempotent (IF NOT EXISTS /
+      # BEGIN TRAN ... ROLLBACK pattern) so re-runs on retry are safe.
+      - name: Apply pending SQL migrations
+        shell: pwsh
+        run: |
+          $appName = "${{ env.AZURE_WEBAPP_NAME }}"
+          $parts   = $appName -split '-'
+          $environment    = $parts[2]
+          $workloadSuffix = $parts[3]
+
+          $sqlServer   = "sql-capdash-${environment}-${workloadSuffix}.database.windows.net"
+          $sqlDatabase = "sqldb-capdash-$environment"
+
+          $migrations = Get-ChildItem -Path "sql/migrations" -Filter "*.sql" |
+                        Sort-Object Name
+
+          Write-Host "Found $($migrations.Count) migration file(s) in sql/migrations/"
+
+          foreach ($migration in $migrations) {
+            Write-Host "→ Applying: $($migration.Name)"
+            & ./scripts/apply-migration.ps1 `
+              -SqlServer    $sqlServer `
+              -SqlDatabase  $sqlDatabase `
+              -MigrationFile $migration.FullName `
+              -UseEntra
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "ERROR: Migration failed: $($migration.Name)" -ForegroundColor Red
+              exit 1
+            }
+          }
+          Write-Host "✓ All migrations applied successfully" -ForegroundColor Green
+
+      - name: Close SQL firewall
+        # Runs even if preceding steps failed — ensures firewall is never left open.
         if: always()
         run: |
-          SQL_SERVER="sql-capdash-prod-prod01"
+          APP="${{ env.AZURE_WEBAPP_NAME }}"
+          ENV_PART=$(echo "$APP" | cut -d'-' -f3)
+          SUFFIX=$(echo "$APP" | cut -d'-' -f4)
+          SQL_SERVER="sql-capdash-${ENV_PART}-${SUFFIX}"
+
           az sql server firewall-rule delete \
             --name github-actions-temp \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --server $SQL_SERVER \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --server "$SQL_SERVER" \
             --output none 2>/dev/null || true
           az sql server update \
-            --name $SQL_SERVER \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name "$SQL_SERVER" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
             --set publicNetworkAccess=Disabled \
             --output none
           echo "✓ SQL firewall closed"
@@ -213,20 +294,21 @@ jobs:
       - name: Restart App Service
         run: |
           az webapp restart \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --name ${{ env.AZURE_WEBAPP_NAME }}
-          echo "✓ App restarted successfully"
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ env.AZURE_WEBAPP_NAME }}"
+          echo "✓ App restarted"
 
       - name: Wait for App Service to be ready
         shell: pwsh
         run: |
-          $healthUrl = "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/healthz"
+          $healthUrl   = "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/healthz"
           $maxAttempts = 30
-          $attempt = 0
+          $attempt     = 0
           Write-Host "Polling $healthUrl ..."
           while ($attempt -lt $maxAttempts) {
             try {
-              $response = Invoke-WebRequest -Uri $healthUrl -UseBasicParsing -ErrorAction Stop -MaximumRedirection 0
+              $response = Invoke-WebRequest -Uri $healthUrl -UseBasicParsing `
+                            -ErrorAction Stop -MaximumRedirection 0
               Write-Host "App is responsive (HTTP $($response.StatusCode))" -ForegroundColor Green
               exit 0
             } catch {
@@ -236,198 +318,17 @@ jobs:
                 exit 0
               }
               $attempt++
-              Write-Host "Attempt $attempt/$($maxAttempts): $($_.Exception.Message) — retrying in 5 seconds..."
+              Write-Host "Attempt $attempt/$maxAttempts — retrying in 5 s..."
               Start-Sleep -Seconds 5
             }
           }
           Write-Host "ERROR: App did not respond after $maxAttempts attempts" -ForegroundColor Red
           exit 1
 
-      - name: Verify deployment
+      - name: Deployment summary
         run: |
-          echo "Deployment completed successfully"
-          echo "App URL: https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
-          echo "SQL managed identity configured and app is running"
-
-  deploy-manual:
-    runs-on: ubuntu-latest
-    environment: production
-    if: github.event_name == 'workflow_dispatch'
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Azure Login (OIDC)
-        uses: azure/login@v3
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install production dependencies
-        run: npm ci --production
-
-      - name: Run tests
-        run: npm test
-
-      - name: Create deployment package
-        run: |
-          mkdir -p deployment
-          cp package.json deployment/
-          cp package-lock.json deployment/ 2>/dev/null || true
-          cp server.js deployment/
-          cp app.js deployment/
-          cp index.html deployment/
-          cp styles.css deployment/
-          cp web.config deployment/ 2>/dev/null || true
-          cp -r node_modules deployment/ 2>/dev/null || true
-          cp -r react deployment/ 2>/dev/null || true
-          cp -r src deployment/ 2>/dev/null || true
-          cp -r sql deployment/ 2>/dev/null || true
-          cp -r docs deployment/ 2>/dev/null || true
-          cp -r infra deployment/ 2>/dev/null || true
-          cp -r tools deployment/ 2>/dev/null || true
-          cp -r scripts deployment/ 2>/dev/null || true
-          cd deployment
-          zip -r ../deployment.zip .
-
-      - name: Deploy to Azure App Service
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: 'app-capdash-prod-prod01'
-          package: deployment.zip
-          resource-group-name: ${{ vars.AZURE_RESOURCE_GROUP }}
-
-      - name: Install sqlcmd
-        run: |
-          # Install go-sqlcmd (supports ActiveDirectoryDefault auth for CI/CD)
-          VERSION=$(curl -sSL https://api.github.com/repos/microsoft/go-sqlcmd/releases/latest \
-            | python3 -c "import sys,json;print(json.load(sys.stdin)['tag_name'])")
-          curl -sSL "https://github.com/microsoft/go-sqlcmd/releases/download/${VERSION}/sqlcmd-linux-amd64.tar.bz2" \
-            | sudo tar -xj -C /usr/local/bin sqlcmd
-          sqlcmd --version
-
-      - name: Open SQL firewall for deployment
-        run: |
-          SQL_SERVER="sql-capdash-prod-prod01"
-          RUNNER_IP=$(curl -sSL https://api.ipify.org)
-          echo "Runner IP: $RUNNER_IP"
-          az sql server update \
-            --name $SQL_SERVER \
-            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
-            --set publicNetworkAccess=Enabled \
-            --output none
-          az sql server firewall-rule create \
-            --name github-actions-temp \
-            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
-            --server $SQL_SERVER \
-            --start-ip-address $RUNNER_IP \
-            --end-ip-address $RUNNER_IP \
-            --output none
-          echo "✓ SQL firewall opened for $RUNNER_IP"
-
-      - name: Bootstrap SQL Database for Managed Identity
-        shell: pwsh
-        run: |
-          # Extract SQL server and database names from resource naming pattern
-          # Pattern: app-capdash-{environment}-{workloadSuffix}
-          $appName = "app-capdash-prod-prod01"
-          
-          # Parse naming convention: app-capdash-PROD-PROD01
-          $parts = $appName -split '-'
-          $environment = $parts[2]  # 'prod'
-          $workloadSuffix = $parts[3]  # 'prod01'
-          
-          $sqlServerName = "sql-capdash-$environment-$workloadSuffix"
-          $sqlDatabaseName = "sqldb-capdash-$environment"
-          
-          Write-Host "Bootstrapping SQL Database..."
-          Write-Host "  SQL Server: $sqlServerName"
-          Write-Host "  Database: $sqlDatabaseName"
-          
-          # Execute bootstrap script with error handling
-          try {
-            & ./scripts/bootstrap-sql-managed-identity.ps1 `
-              -AppServiceName "app-capdash-prod-prod01" `
-              -SqlServerName $sqlServerName `
-              -SqlDatabaseName $sqlDatabaseName `
-              -ResourceGroup "${{ vars.AZURE_RESOURCE_GROUP }}" `
-              -SubscriptionId "${{ vars.AZURE_SUBSCRIPTION_ID }}"
-            
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "ERROR: SQL bootstrap script failed with exit code $LASTEXITCODE" -ForegroundColor Red
-              exit 1
-            }
-            Write-Host "✓ SQL bootstrap completed successfully" -ForegroundColor Green
-          }
-          catch {
-            Write-Host "ERROR: SQL bootstrap failed - $_" -ForegroundColor Red
-            exit 1
-          }
-
-      - name: Close SQL firewall after deployment
-        if: always()
-        run: |
-          SQL_SERVER="sql-capdash-prod-prod01"
-          az sql server firewall-rule delete \
-            --name github-actions-temp \
-            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
-            --server $SQL_SERVER \
-            --output none 2>/dev/null || true
-          az sql server update \
-            --name $SQL_SERVER \
-            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
-            --set publicNetworkAccess=Disabled \
-            --output none
-          echo "✓ SQL firewall closed"
-
-      - name: Restart App Service
-        run: |
-          az webapp restart \
-            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
-            --name app-capdash-prod-prod01
-          echo "✓ App restarted successfully"
-
-      - name: Wait for App Service to be ready
-        shell: pwsh
-        run: |
-          $healthUrl = "https://app-capdash-prod-prod01.azurewebsites.net/healthz"
-          $maxAttempts = 30
-          $attempt = 0
-          Write-Host "Polling $healthUrl ..."
-          while ($attempt -lt $maxAttempts) {
-            try {
-              $response = Invoke-WebRequest -Uri $healthUrl -UseBasicParsing -ErrorAction Stop -MaximumRedirection 0
-              Write-Host "App is responsive (HTTP $($response.StatusCode))" -ForegroundColor Green
-              exit 0
-            } catch {
-              $status = $_.Exception.Response.StatusCode.value__
-              if ($status -ge 200 -and $status -lt 500) {
-                Write-Host "App is responsive (HTTP $status)" -ForegroundColor Green
-                exit 0
-              }
-              $attempt++
-              Write-Host "Attempt $attempt/$($maxAttempts): $($_.Exception.Message) — retrying in 5 seconds..."
-              Start-Sleep -Seconds 5
-            }
-          }
-          Write-Host "ERROR: App did not respond after $maxAttempts attempts" -ForegroundColor Red
-          exit 1
-
-      - name: Post-deployment verification
-        run: |
-          echo "✓ Manual deployment to ${{ github.event.inputs.environment }} completed"
-          echo "App URL: https://app-capdash-prod-prod01.azurewebsites.net"
-          echo "SQL managed identity configured and app is running"
+          echo "✅ Deployment complete"
+          echo "App URL : https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
+          echo "Trigger : ${{ github.event_name }}"
+          echo "Ref     : ${{ github.ref }} @ ${{ github.sha }}"
+          echo "Env     : ${{ github.event.inputs.environment || 'prod' }}"
