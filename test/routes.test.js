@@ -163,9 +163,27 @@ test('GET /api/admin/config returns 200 with sanitized config shape when AUTH_EN
   // appInsights section must be present with a boolean configured field
   assert.ok(config.appInsights, 'config.appInsights section should be present');
   assert.equal(typeof config.appInsights.configured, 'boolean', 'appInsights.configured must be a boolean');
+
+  // ingestion status section must be present
+  assert.ok(config.ingestion, 'config.ingestion section should be present');
+  assert.ok(['never', 'success', 'error'].includes(config.ingestion.lastRunStatus), 'lastRunStatus must be never/success/error');
+  assert.equal(typeof config.ingestion.inProgress, 'boolean', 'ingestion.inProgress must be a boolean');
 });
 
-// ─── GET /api/admin/config — appInsights.configured reflects env var ──────────
+// ─── GET /api/admin/config — ingestion status section ───────────────────────
+
+test('GET /api/admin/config ingestion section present with correct shape on cold start', async () => {
+  const res = await request(app).get('/api/admin/config');
+  assert.equal(res.status, 200);
+  const { ingestion } = res.body.config;
+  assert.ok(ingestion, 'config.ingestion section should be present');
+  assert.equal(ingestion.lastRunStatus, 'never', 'lastRunStatus should be "never" before any ingestion run');
+  assert.equal(ingestion.lastRunAt, null, 'lastRunAt should be null before any ingestion run');
+  assert.equal(ingestion.lastRunRecords, null, 'lastRunRecords should be null before any ingestion run');
+  assert.equal(ingestion.lastErrorMessage, null, 'lastErrorMessage should be null before any ingestion run');
+  assert.equal(typeof ingestion.inProgress, 'boolean', 'inProgress must be a boolean');
+});
+
 
 test('GET /api/admin/config appInsights.configured is false when APPLICATIONINSIGHTS_CONNECTION_STRING is not set', async () => {
   const saved = process.env.APPLICATIONINSIGHTS_CONNECTION_STRING;
