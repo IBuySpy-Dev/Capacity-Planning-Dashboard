@@ -1,0 +1,128 @@
+name: Deploy Azure Infrastructure (Bicep)
+
+# Deploys the Bicep IaC and pushes Bicep output values (webapp name, SQL
+# server name, SQL database name) as GitHub repository variables so all
+# subsequent workflows can reference them without manual configuration.
+#
+# Run this once after bootstrap and again whenever infrastructure changes.
+# The bootstrap only sets up identity (OIDC); this workflow creates the
+# actual Azure resources and completes the variable configuration.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+      - '.github/workflows/bicep-deploy.yml'
+
+# cancel-in-progress: false — never cancel a running infra deployment.
+# Cancelling mid-deploy can leave Azure resources in a partially-provisioned
+# state that requires manual cleanup. Queue concurrent runs instead.
+concurrency:
+  group: bicep-deploy-production
+  cancel-in-progress: false
+
+env:
+  RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  DEPLOYMENT_NAME: main
+
+jobs:
+  deploy:
+    name: Deploy Bicep
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+
+    outputs:
+      webAppName: ${{ steps.outputs.outputs.webAppName }}
+      sqlServerName: ${{ steps.outputs.outputs.sqlServerName }}
+      sqlDatabaseName: ${{ steps.outputs.outputs.sqlDatabaseName }}
+      keyVaultName: ${{ steps.outputs.outputs.keyVaultName }}
+      webAppUrl: ${{ steps.outputs.outputs.webAppUrl }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Azure (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Bicep build (lint)
+        run: |
+          az bicep build --file infra/bicep/main.bicep
+          echo "✓ Bicep lint passed"
+
+      - name: Deploy Bicep
+        run: |
+          az deployment group create \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$DEPLOYMENT_NAME" \
+            --template-file infra/bicep/main.bicep \
+            --parameters infra/bicep/prod.bicepparam \
+            --parameters \
+              entraTenantId="${{ secrets.ENTRA_TENANT_ID }}" \
+              entraClientId="${{ secrets.ENTRA_CLIENT_ID }}" \
+              entraClientSecret="${{ secrets.ENTRA_CLIENT_SECRET }}" \
+              adminGroupId="${{ secrets.ADMIN_GROUP_ID }}" \
+              ingestApiKey="${{ secrets.INGEST_API_KEY }}" \
+              sessionSecret="${{ secrets.SESSION_SECRET }}" \
+            --output none
+          echo "✓ Bicep deployment complete"
+
+      - name: Capture Bicep outputs
+        id: outputs
+        run: |
+          OUTPUTS=$(az deployment group show \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$DEPLOYMENT_NAME" \
+            --query properties.outputs \
+            -o json)
+
+          webAppName=$(echo "$OUTPUTS"     | jq -r '.webAppName.value')
+          sqlServerName=$(echo "$OUTPUTS"  | jq -r '.sqlServerName.value')
+          sqlDatabaseName=$(echo "$OUTPUTS" | jq -r '.sqlDatabaseName.value')
+          keyVaultName=$(echo "$OUTPUTS"   | jq -r '.keyVaultName.value')
+          webAppUrl=$(echo "$OUTPUTS"      | jq -r '.webAppUrl.value')
+
+          echo "webAppName=$webAppName"       >> "$GITHUB_OUTPUT"
+          echo "sqlServerName=$sqlServerName" >> "$GITHUB_OUTPUT"
+          echo "sqlDatabaseName=$sqlDatabaseName" >> "$GITHUB_OUTPUT"
+          echo "keyVaultName=$keyVaultName"   >> "$GITHUB_OUTPUT"
+          echo "webAppUrl=$webAppUrl"         >> "$GITHUB_OUTPUT"
+
+          echo ""
+          echo "📦 Bicep outputs:"
+          echo "  webAppName:     $webAppName"
+          echo "  sqlServerName:  $sqlServerName"
+          echo "  sqlDatabaseName:$sqlDatabaseName"
+          echo "  keyVaultName:   $keyVaultName"
+          echo "  webAppUrl:      $webAppUrl"
+
+      - name: Push resource vars to GitHub
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REPO="${{ github.repository }}"
+
+          gh variable set AZURE_WEBAPP_NAME   --body "${{ steps.outputs.outputs.webAppName }}"     --repo "$REPO"
+          echo "✅ AZURE_WEBAPP_NAME = ${{ steps.outputs.outputs.webAppName }}"
+
+          gh variable set SQL_SERVER_NAME     --body "${{ steps.outputs.outputs.sqlServerName }}"   --repo "$REPO"
+          echo "✅ SQL_SERVER_NAME = ${{ steps.outputs.outputs.sqlServerName }}"
+
+          gh variable set SQL_DATABASE_NAME   --body "${{ steps.outputs.outputs.sqlDatabaseName }}" --repo "$REPO"
+          echo "✅ SQL_DATABASE_NAME = ${{ steps.outputs.outputs.sqlDatabaseName }}"
+
+          gh variable set KEY_VAULT_NAME      --body "${{ steps.outputs.outputs.keyVaultName }}"    --repo "$REPO"
+          echo "✅ KEY_VAULT_NAME = ${{ steps.outputs.outputs.keyVaultName }}"
+
+          echo ""
+          echo "✅ All resource vars pushed. CI/CD workflows are now fully configured."
+          echo "   Next: gh workflow run sql-schema.yml"
