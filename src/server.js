@@ -389,6 +389,7 @@ function sendErrorResponse(res, {
   err = null,
   scope = 'request',
   exposeMessage = false,
+  context = null,
   extra = {}
 } = {}) {
   const requestId = randomUUID();
@@ -401,6 +402,7 @@ function sendErrorResponse(res, {
       message: err.message || clientMessage,
       stack: err.stack || null,
       severity: status >= 500 ? 'error' : 'warn',
+      context,
       requestId
     }).catch(() => { /* suppress — logging must never break the response path */ });
   }
@@ -2220,7 +2222,12 @@ app.get('/api/subscriptions', async (req, res) => {
     });
     res.json({ rows });
   } catch (err) {
-    sendErrorResponse(res, { clientMessage: 'Failed to retrieve subscriptions.', err, scope: 'api/subscriptions' });
+    sendErrorResponse(res, {
+      clientMessage: 'Failed to retrieve subscriptions.',
+      err,
+      scope: 'api/subscriptions',
+      context: { limit: req.query.limit, search: req.query.search ? '[redacted]' : undefined }
+    });
   }
 });
 
@@ -2354,19 +2361,34 @@ app.get('/api/capacity/trends', async (req, res) => {
 });
 
 app.get('/api/capacity/families', async (req, res) => {
+  const filters = {
+    regionPreset: req.query.regionPreset,
+    subscriptionIds: req.query.subscriptionIds,
+    region: req.query.region,
+    family: req.query.family,
+    familyBase: req.query.familyBase,
+    sku: req.query.sku,
+    availability: req.query.availability
+  };
   try {
-    const rows = await getFamilySummary({
-      regionPreset: req.query.regionPreset,
-      subscriptionIds: req.query.subscriptionIds,
-      region: req.query.region,
-      family: req.query.family,
-      familyBase: req.query.familyBase,
-      sku: req.query.sku,
-      availability: req.query.availability
-    });
+    const rows = await getFamilySummary(filters);
     res.json({ rows });
   } catch (err) {
-    sendErrorResponse(res, { clientMessage: 'Failed to retrieve family summary.', err, scope: 'api/capacity/families' });
+    const subIds = String(filters.subscriptionIds || '').split(',').filter(Boolean);
+    sendErrorResponse(res, {
+      clientMessage: 'Failed to retrieve family summary.',
+      err,
+      scope: 'api/capacity/families',
+      context: {
+        regionPreset: filters.regionPreset,
+        region: filters.region,
+        subscriptionIdCount: subIds.length,
+        family: filters.family,
+        familyBase: filters.familyBase,
+        sku: filters.sku,
+        availability: filters.availability
+      }
+    });
   }
 });
 
