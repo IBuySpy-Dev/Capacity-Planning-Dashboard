@@ -5,6 +5,14 @@ This repository contains the initial platform scaffold for a native Azure capaci
 <img width="1904" height="866" alt="image" src="https://github.com/user-attachments/assets/a0f79e91-9e06-4213-bfbd-d1d54865d7e6" />
 
 
+## Local Development
+
+1. Copy `.env.sample` to `.env` and fill in values.
+2. Start a local SQL Server: `docker compose up -d` (requires Docker Desktop; see [docker-compose.yml](docker-compose.yml) once #48 is complete).
+3. Run the app: `npm install && npm start`.
+
+See [`docs/ENVIRONMENT_VARIABLES.md`](docs/ENVIRONMENT_VARIABLES.md) for a full reference of all supported environment variables.
+
 ## What is included now
 
 - Web UI with tabs, filters, action buttons, and a data grid
