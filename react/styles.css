@@ -262,6 +262,18 @@ body {
   color: var(--rx-muted);
 }
 
+.rx-staleness-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid rgba(213, 224, 235, 0.9);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.84);
+  font-size: 0.75rem;
+  color: var(--rx-muted);
+  white-space: nowrap;
+}
+
 .rx-drawer {
   position: sticky;
   top: 0;
