@@ -259,6 +259,20 @@ function formatTimestamp(value) {
   return Number.isNaN(timestamp.getTime()) ? 'Never' : timestamp.toLocaleString();
 }
 
+function formatRelativeTime(value) {
+  if (!value) return 'Never';
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) return 'Never';
+  const seconds = Math.floor((Date.now() - timestamp.getTime()) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
 function formatDuration(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric) || numeric <= 0) return 'n/a';
@@ -3008,6 +3022,7 @@ function App() {
   const [showSqlPreview, setShowSqlPreview] = useState(false);
   const [sqlPreviewState, setSqlPreviewState] = useState({ loading: false, error: '', rows: [] });
   const [uiSettingsBusy, setUiSettingsBusy] = useState(false);
+  const [lastIngestedUtc, setLastIngestedUtc] = useState(undefined);
   const [selectedExportOption, setSelectedExportOption] = useState('server:xlsx:report');
   const [skuCatalogVersion, setSkuCatalogVersion] = useState(0);
 
@@ -3734,6 +3749,17 @@ function App() {
       }
     }
     initialize();
+  }, []);
+
+  useEffect(() => {
+    fetchJson('/api/admin/ingest/status')
+      .then((payload) => {
+        const utc = payload?.status?.lastSuccessUtc || null;
+        setLastIngestedUtc(utc);
+      })
+      .catch(() => {
+        setLastIngestedUtc(null);
+      });
   }, []);
 
   useEffect(() => {
@@ -4927,6 +4953,7 @@ function App() {
           </div>
           <div className="rx-topbar__actions">
             {isAdminView ? <label className="rx-check rx-check--sql-toggle"><input type="checkbox" checked={showSqlPreview} disabled={uiSettingsBusy} onChange={(event) => handleShowSqlPreviewChange(event.target.checked)} />Show SQL</label> : null}
+            {lastIngestedUtc !== undefined ? <span className="rx-staleness-badge" title={lastIngestedUtc ? `Last successful ingestion: ${formatTimestamp(lastIngestedUtc)}` : 'No ingestion has completed yet'}>Last ingested: {formatRelativeTime(lastIngestedUtc)}</span> : null}
             <div className="rx-user-chip">
               <strong>{auth?.name || 'Loading user...'}</strong>
               <small>{auth?.username || 'No Entra context yet'}</small>
