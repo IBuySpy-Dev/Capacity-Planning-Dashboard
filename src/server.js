@@ -2309,6 +2309,9 @@ app.get('/api/admin/config', requireAdmin, async (_req, res) => {
         refreshIntervalMinutes: normalizeIntervalMinutes(process.env.LIVE_PLACEMENT_REFRESH_INTERVAL_MINUTES),
         regionPreset: process.env.LIVE_PLACEMENT_REFRESH_REGION_PRESET || 'USMajor',
         subscriptionIds: `${countCsv(process.env.LIVE_PLACEMENT_REFRESH_SUBSCRIPTION_IDS)} configured`
+      },
+      appInsights: {
+        configured: Boolean(process.env.APPLICATIONINSIGHTS_CONNECTION_STRING)
       }
     }
   });

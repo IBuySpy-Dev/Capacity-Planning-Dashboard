@@ -159,4 +159,45 @@ test('GET /api/admin/config returns 200 with sanitized config shape when AUTH_EN
 
   // auth.authEnabled must be a boolean
   assert.equal(typeof config.auth.authEnabled, 'boolean', 'auth.authEnabled must be a boolean');
+
+  // appInsights section must be present with a boolean configured field
+  assert.ok(config.appInsights, 'config.appInsights section should be present');
+  assert.equal(typeof config.appInsights.configured, 'boolean', 'appInsights.configured must be a boolean');
+});
+
+// ─── GET /api/admin/config — appInsights.configured reflects env var ──────────
+
+test('GET /api/admin/config appInsights.configured is false when APPLICATIONINSIGHTS_CONNECTION_STRING is not set', async () => {
+  const saved = process.env.APPLICATIONINSIGHTS_CONNECTION_STRING;
+  delete process.env.APPLICATIONINSIGHTS_CONNECTION_STRING;
+
+  try {
+    const res = await request(app).get('/api/admin/config');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.config.appInsights.configured, false,
+      'appInsights.configured should be false when env var is absent');
+  } finally {
+    if (saved !== undefined) process.env.APPLICATIONINSIGHTS_CONNECTION_STRING = saved;
+  }
+});
+
+test('GET /api/admin/config appInsights.configured is true when APPLICATIONINSIGHTS_CONNECTION_STRING is set', async () => {
+  const saved = process.env.APPLICATIONINSIGHTS_CONNECTION_STRING;
+  process.env.APPLICATIONINSIGHTS_CONNECTION_STRING = 'InstrumentationKey=fake-key;IngestionEndpoint=https://fake.in.applicationinsights.azure.com/';
+
+  try {
+    const res = await request(app).get('/api/admin/config');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.config.appInsights.configured, true,
+      'appInsights.configured should be true when env var is set');
+    // Verify the actual connection string value is NOT in the response
+    const body = JSON.stringify(res.body);
+    assert.ok(!body.includes('fake-key'), 'connection string value must not appear in response');
+  } finally {
+    if (saved !== undefined) {
+      process.env.APPLICATIONINSIGHTS_CONNECTION_STRING = saved;
+    } else {
+      delete process.env.APPLICATIONINSIGHTS_CONNECTION_STRING;
+    }
+  }
 });
