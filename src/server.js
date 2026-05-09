@@ -2073,9 +2073,12 @@ app.get('/api/capacity/analytics', async (req, res) => {
   }
 });
 
-app.get('/api/quota/groups', requireAuth, async (_, res) => {
+app.get('/api/quota/groups', requireAuth, async (req, res) => {
+  if (!req.query.managementGroupId) {
+    return res.status(400).json({ ok: false, error: 'managementGroupId query parameter is required.' });
+  }
   try {
-    const result = await listQuotaGroups(_.query.managementGroupId);
+    const result = await listQuotaGroups(req.query.managementGroupId);
     res.json({ ok: true, ...result });
   } catch (err) {
     const status = err.message.includes('QUOTA_MANAGEMENT_GROUP_ID') ? 503 : 500;
@@ -2862,6 +2865,11 @@ app.post('/api/admin/ingest/capacity', requireAdmin, async (req, res) => {
 app.get('/api/admin/ingest/status', requireAdmin, (_, res) => {
   const activeJob = getActiveIngestionJob();
   res.json({ ok: true, status: getIngestionStatus(), activeJob: activeJob ? serializeIngestionJob(activeJob) : null });
+});
+
+app.get('/api/ingest/last-success', requireAuth, (_, res) => {
+  const { lastSuccessUtc } = getIngestionStatus();
+  res.json({ ok: true, lastSuccessUtc: lastSuccessUtc || null });
 });
 
 app.post('/api/admin/ingest/model-catalog', requireAdmin, async (req, res) => {

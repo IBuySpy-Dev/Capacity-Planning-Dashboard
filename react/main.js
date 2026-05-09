@@ -3752,9 +3752,9 @@ function App() {
   }, []);
 
   useEffect(() => {
-    fetchJson('/api/admin/ingest/status')
+    fetchJson('/api/ingest/last-success')
       .then((payload) => {
-        const utc = payload?.status?.lastSuccessUtc || null;
+        const utc = payload?.lastSuccessUtc || null;
         setLastIngestedUtc(utc);
       })
       .catch(() => {
@@ -4661,7 +4661,7 @@ function App() {
 
   const quotaActions = {
     discover: async () => {
-      if (!auth?.isAuthenticated) return;
+      if (!auth?.isAuthenticated || !quotaState.selectedManagementGroup) return;
       setQuotaState((current) => ({ ...current, busy: { ...current.busy, discover: true } }));
       try {
         const payload = await fetchJson(`/api/quota/groups?managementGroupId=${encodeURIComponent(quotaState.selectedManagementGroup)}`);
