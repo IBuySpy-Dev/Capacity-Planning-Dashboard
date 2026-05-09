@@ -159,6 +159,8 @@ Security and governance bundles (marked `[pin]`) are exempt from confidence deca
 |---|---|---|
 | Branch cleanup | Squash merges won't show as `--merged`; use `gh pr list --state all --head <branch>` to verify | `git-hygiene` |
 | Worktrees | Sprint branches use separate worktrees; check with `git worktree list` | `git-worktree` |
+| Fork + upstream 403 | Enterprise repos often have `origin=personal-fork` and `upstream=org-repo`. Push to `upstream`, not `origin`. 403 on push means wrong remote — check `git remote -v` first | `fork-upstream` [pin] |
+| Fork upstream push | `git push upstream <branch>` then `gh pr create --repo ORG/REPO` — `gh` defaults to `origin`; always pass `--repo` explicitly when origin ≠ PR target | `fork-pr-target` |
 
 ### Turn Budget
 
