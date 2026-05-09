@@ -1950,12 +1950,24 @@ app.get('/api/capacity', async (req, res) => {
   }
 });
 
+const EXPORT_ROW_LIMIT = 50_000;
+
 app.get('/api/capacity/export', async (req, res) => {
   try {
     const filters = getCapacityFiltersFromQuery(req.query);
     const format = normalizeCapacityExportFormat(req.query.format);
     const variant = normalizeCapacityExportVariant(req.query.variant);
-    const rows = await getCapacityRows(filters);
+    const allRows = await getCapacityRows(filters);
+
+    // Cap at EXPORT_ROW_LIMIT rows and signal truncation via response header so
+    // the client can display a warning without treating the export as an error.
+    const truncated = allRows.length > EXPORT_ROW_LIMIT;
+    const rows = truncated ? allRows.slice(0, EXPORT_ROW_LIMIT) : allRows;
+    if (truncated) {
+      res.setHeader('X-Export-Truncated', 'true');
+      res.setHeader('X-Export-Total-Rows', String(allRows.length));
+    }
+
     const exportRows = buildCapacityExportRows(rows);
     const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
 
