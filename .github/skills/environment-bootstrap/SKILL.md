@@ -56,6 +56,30 @@ See \eferences/github-actions-secrets.md\ for GitHub Actions integration includ
 - Retrieving secrets from Key Vault
 - Setting GitHub repository secrets
 
+### Variable Scope: Repository vs. Environment
+
+**Critical gotcha:** GitHub Actions job-level `if:` conditions are evaluated **before** the`n`environment:` block loads. Variables scoped to a GitHub Environment are **not available** in
+job guards — they evaluate to empty string at guard evaluation time.
+
+**Rule:** Any variable used in a job-level `if:` must be set at **repository level**:
+
+```yaml
+# ❌ Wrong — MY_VAR set only under Settings > Environments > production
+jobs:
+  deploy:
+    environment: production
+    if: ${{ vars.MY_VAR != '' }}  # always empty — env not loaded yet
+
+# ✅ Correct — MY_VAR also set under Settings > Actions > Variables (repo level)
+jobs:
+  deploy:
+    environment: production
+    if: ${{ vars.MY_VAR != '' }}  # works — reads repo-level var
+```  
+
+Set the variable at **both** levels: repo level for guard visibility, environment level for
+env-specific value override during job execution.
+
 ## Environment Promotion
 
 See \eferences/environment-promotion.md\ for multi-environment promotion including:

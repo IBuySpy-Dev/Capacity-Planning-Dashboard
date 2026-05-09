@@ -80,6 +80,18 @@ The agent activates under these conditions:
 7. **Cache Hit Anomaly**: Unusual cache behavior or corruption indicators
 8. **Rate Limiting**: Throttling or API quota exhaustion from external services
 
+## Known Azure CI Failure Patterns
+
+These failure modes have confirmed fixes and should be auto-classified as `known-fix`:
+
+| Error Signal | Root Cause | Fix |
+|---|---|---|
+| `Unrecognized command line argument 'publish'` + `Missing required argument '<Action>'` | `dotnet tool install -g microsoft.sqlpackage` installs a version using legacy `/Action:` flag syntax, not the `publish` subcommand | Change `sqlpackage publish \` → `sqlpackage /Action:Publish \` |
+| `DenyPublicEndpointEnabled` during `az sql server firewall-rule create` | Azure SQL `publicNetworkAccess=Disabled` blocks firewall rule adds even with correct RBAC | Run `az sql server update --set publicNetworkAccess=Enabled` before adding the firewall rule; restore `Disabled` in `if: always()` cleanup |
+| Deploy job silently skipped despite `if: ${{ vars.MY_VAR != '' }}` condition | Job-level `if:` evaluates before `environment:` block loads; environment-scoped vars are empty at evaluation time | Set the guard variable at **repository level** (not only environment level) |
+
+Full signatures and resolution steps in `.github/error-kb/errors.json`. Human-readable patterns in `.github/error-kb/patterns/deploy-errors.md`.
+
 ## Remediation Strategies
 
 ### Strategy: Retry with Exponential Backoff
