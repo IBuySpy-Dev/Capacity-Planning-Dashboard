@@ -32,6 +32,7 @@ if (fs.existsSync(localEnvPath)) {
 const session = require('express-session');
 const MSSQLStore = require('connect-mssql-v2');
 const { AUTH_ENABLED, buildAuthRouter, requireAuth, requireAdmin, getAccountFromSession, isAdmin } = require('./middleware/auth');
+const rateLimit = require('express-rate-limit');
 
 const {
   getCapacityRows,
@@ -1499,6 +1500,14 @@ app.use('/api', (req, res, next) => {
   if (getAccountFromSession(req)) return next();
   return res.status(401).json({ ok: false, error: 'Authentication required.' });
 });
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/', apiLimiter);
 
 function isReactPrototypeHostAllowed(hostname = '') {
   // Allow React prototype if explicitly enabled via environment variable
