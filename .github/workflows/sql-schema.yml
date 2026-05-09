@@ -105,7 +105,8 @@ jobs:
 
       - name: Deploy DACPAC
         run: |
-          sqlpackage publish \
+          sqlpackage \
+            /Action:Publish \
             /SourceFile:"dacpac-out/capdash.dacpac" \
             /TargetServerName:"${{ env.SQL_SERVER }}.database.windows.net" \
             /TargetDatabaseName:"${{ env.SQL_DATABASE }}" \
