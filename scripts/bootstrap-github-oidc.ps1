@@ -306,6 +306,44 @@ try {
     Write-Info "  gh variable set <NAME> --body '<VALUE>' --env $EnvironmentName --repo $repo"
 }
 
+Write-Section "Discovering Azure resource names (repo-level vars)..."
+
+try {
+    $webAppName = (az webapp list --resource-group $ResourceGroupName --query "[0].name" -o tsv 2>$null).Trim()
+    $sqlServerName = (az sql server list --resource-group $ResourceGroupName --query "[0].name" -o tsv 2>$null).Trim()
+    $sqlDatabaseName = if ($sqlServerName) {
+        (az sql db list --resource-group $ResourceGroupName --server $sqlServerName `
+            --query "[?name!='master'].name | [0]" -o tsv 2>$null).Trim()
+    }
+
+    if ($webAppName) {
+        gh variable set AZURE_WEBAPP_NAME --body $webAppName --repo $repo
+        Write-Success "AZURE_WEBAPP_NAME = $webAppName"
+    } else {
+        Write-Warning "No web app found in '$ResourceGroupName' — AZURE_WEBAPP_NAME not set. Re-run bootstrap after IaC deployment."
+    }
+
+    if ($sqlServerName) {
+        gh variable set SQL_SERVER_NAME --body $sqlServerName --repo $repo
+        Write-Success "SQL_SERVER_NAME = $sqlServerName"
+    } else {
+        Write-Warning "No SQL server found in '$ResourceGroupName' — SQL_SERVER_NAME not set. Re-run bootstrap after IaC deployment."
+    }
+
+    if ($sqlDatabaseName) {
+        gh variable set SQL_DATABASE_NAME --body $sqlDatabaseName --repo $repo
+        Write-Success "SQL_DATABASE_NAME = $sqlDatabaseName"
+    } else {
+        Write-Warning "No SQL database found — SQL_DATABASE_NAME not set. Re-run bootstrap after IaC deployment."
+    }
+} catch {
+    Write-Warning "Could not discover Azure resource names: $_"
+    Write-Info "Set these manually after IaC deployment completes:"
+    Write-Info "  gh variable set AZURE_WEBAPP_NAME --body '<name>' --repo $repo"
+    Write-Info "  gh variable set SQL_SERVER_NAME   --body '<name>' --repo $repo"
+    Write-Info "  gh variable set SQL_DATABASE_NAME --body '<name>' --repo $repo"
+}
+
 # ============================================================================
 # STEP 6: OUTPUT DEPLOYMENT CONFIGURATION
 # ============================================================================
