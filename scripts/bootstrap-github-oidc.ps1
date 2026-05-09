@@ -347,6 +347,26 @@ try {
     Write-Info "  gh variable set <NAME> --body '<VALUE>' --env $EnvironmentName --repo $repo"
 }
 
+# Enable GitHub Pages with GitHub Actions as the build source (idempotent)
+Write-Section "Configuring GitHub Pages..."
+try {
+    $pagesStatus = gh api "repos/$repo/pages" --method GET 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Success "GitHub Pages already enabled — skipping"
+    } else {
+        $pagesBody = '{"build_type":"workflow"}'
+        $pagesResult = $pagesBody | gh api "repos/$repo/pages" --method POST --input - 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Success "GitHub Pages enabled (source: GitHub Actions)"
+        } else {
+            Write-Warning "Could not enable GitHub Pages automatically: $pagesResult"
+            Write-Info "Enable manually: Settings → Pages → Source → GitHub Actions"
+        }
+    }
+} catch {
+    Write-Warning "GitHub Pages configuration skipped: $_"
+}
+
 # ============================================================================
 # STEP 6: OUTPUT DEPLOYMENT CONFIGURATION
 # ============================================================================
@@ -453,6 +473,9 @@ Write-Host ""
 Write-Host "✓ GitHub Environment Variables Set" -ForegroundColor $COLORS.Success
 Write-Host "  Environment: $EnvironmentName"
 Write-Host "  Variables: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_RESOURCE_GROUP"
+Write-Host ""
+Write-Host "✓ GitHub Pages Configured" -ForegroundColor $COLORS.Success
+Write-Host "  Source: GitHub Actions (docs.yml deploys on push to main)"
 Write-Host ""
 Write-Host "🎯 Next Steps:" -ForegroundColor $COLORS.Info
 Write-Host ""
