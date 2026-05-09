@@ -2112,7 +2112,10 @@ app.get('/api/quota/shareable-report', requireAuth, async (req, res) => {
 app.get('/api/quota/management-groups', requireAuth, async (_, res) => {
   try {
     const groups = await listManagementGroups();
-    res.json({ ok: true, groups, defaultManagementGroupId: process.env.QUOTA_MANAGEMENT_GROUP_ID || null });
+    const warning = groups.length === 0
+      ? 'No management groups accessible. Assign the Management Group Reader role to the application identity to enable quota group features.'
+      : undefined;
+    res.json({ ok: true, groups, defaultManagementGroupId: process.env.QUOTA_MANAGEMENT_GROUP_ID || null, warning });
   } catch (err) {
     sendErrorResponse(res, { clientMessage: 'Failed to retrieve management groups.', err, scope: 'api/quota/management-groups', extra: { groups: [] } });
   }

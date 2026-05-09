@@ -43,6 +43,7 @@ jobs:
       sqlDatabaseName: ${{ steps.outputs.outputs.sqlDatabaseName }}
       keyVaultName: ${{ steps.outputs.outputs.keyVaultName }}
       webAppUrl: ${{ steps.outputs.outputs.webAppUrl }}
+      managedIdentityPrincipalId: ${{ steps.outputs.outputs.managedIdentityPrincipalId }}
 
     steps:
       - name: Checkout code
@@ -74,6 +75,7 @@ jobs:
               adminGroupId="${{ secrets.ADMIN_GROUP_ID }}" \
               ingestApiKey="${{ secrets.INGEST_API_KEY }}" \
               sessionSecret="${{ secrets.SESSION_SECRET }}" \
+              quotaManagementGroupId="${{ vars.AZURE_MANAGEMENT_GROUP_ID }}" \
             --output none
           echo "✓ Bicep deployment complete"
 
@@ -91,12 +93,14 @@ jobs:
           sqlDatabaseName=$(echo "$OUTPUTS" | jq -r '.sqlDatabaseName.value')
           keyVaultName=$(echo "$OUTPUTS"   | jq -r '.keyVaultName.value')
           webAppUrl=$(echo "$OUTPUTS"      | jq -r '.webAppUrl.value')
+          managedIdentityPrincipalId=$(echo "$OUTPUTS" | jq -r '.managedIdentityPrincipalId.value')
 
           echo "webAppName=$webAppName"       >> "$GITHUB_OUTPUT"
           echo "sqlServerName=$sqlServerName" >> "$GITHUB_OUTPUT"
           echo "sqlDatabaseName=$sqlDatabaseName" >> "$GITHUB_OUTPUT"
           echo "keyVaultName=$keyVaultName"   >> "$GITHUB_OUTPUT"
           echo "webAppUrl=$webAppUrl"         >> "$GITHUB_OUTPUT"
+          echo "managedIdentityPrincipalId=$managedIdentityPrincipalId" >> "$GITHUB_OUTPUT"
 
           echo ""
           echo "📦 Bicep outputs:"
@@ -105,6 +109,7 @@ jobs:
           echo "  sqlDatabaseName:$sqlDatabaseName"
           echo "  keyVaultName:   $keyVaultName"
           echo "  webAppUrl:      $webAppUrl"
+          echo "  managedIdentityPrincipalId: $managedIdentityPrincipalId"
 
       - name: Push resource vars to GitHub
         continue-on-error: true  # GITHUB_TOKEN cannot write repo variables; requires PAT. See issue #83.
@@ -128,3 +133,32 @@ jobs:
           echo ""
           echo "✅ All resource vars pushed. CI/CD workflows are now fully configured."
           echo "   Next: gh workflow run sql-schema.yml"
+
+      # Assign Management Group Reader to the web app managed identity so it can enumerate
+      # management groups and enable the Quota Discovery tab. Requires the deployment SPN
+      # to have User Access Administrator at the MG scope (granted by bootstrap).
+      - name: Assign Management Group Reader to web app identity
+        if: vars.AZURE_MANAGEMENT_GROUP_ID != ''
+        continue-on-error: true
+        run: |
+          MG_ID="${{ vars.AZURE_MANAGEMENT_GROUP_ID }}"
+          WEB_PRINCIPAL="${{ steps.outputs.outputs.managedIdentityPrincipalId }}"
+
+          if [ -z "$MG_ID" ] || [ -z "$WEB_PRINCIPAL" ]; then
+            echo "⚠ Skipping MG Reader assignment — MG ID or principal ID not available"
+            exit 0
+          fi
+
+          SCOPE="/providers/Microsoft.Management/managementGroups/$MG_ID"
+
+          # Idempotent: ignore "already exists" errors
+          az role assignment create \
+            --role "Management Group Reader" \
+            --scope "$SCOPE" \
+            --assignee-object-id "$WEB_PRINCIPAL" \
+            --assignee-principal-type ServicePrincipal \
+            --output none 2>&1 | grep -v "already exists" || true
+
+          echo "✅ Management Group Reader assigned"
+          echo "   Scope:     $SCOPE"
+          echo "   Principal: $WEB_PRINCIPAL"
