@@ -35,6 +35,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      actions: write
 
     outputs:
       webAppName: ${{ steps.outputs.outputs.webAppName }}
