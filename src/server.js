@@ -2515,6 +2515,118 @@ app.post('/api/capacity/recommendations', async (req, res) => {
   }
 });
 
+// ─── POST /api/capacity/preflight ────────────────────────────────────────────
+// Pre-deployment capacity check: evaluates a list of {sku, region, count}
+// resources against the capacity snapshot and returns a per-resource verdict
+// (go / warn / no-go) plus top alternative SKUs per region.
+
+const PREFLIGHT_SCORE_NUMERIC = { High: 100, Medium: 60, Low: 20 };
+
+app.post('/api/capacity/preflight', requireAuth, async (req, res) => {
+  try {
+    const { resources, options = {} } = req.body || {};
+
+    if (!Array.isArray(resources) || resources.length === 0) {
+      return res.status(400).json({ ok: false, error: 'resources must be a non-empty array.' });
+    }
+
+    const badResource = resources.find((r) => !r.sku || !r.region || r.count == null);
+    if (badResource) {
+      return res.status(400).json({ ok: false, error: 'Each resource must include sku, region, and count.' });
+    }
+
+    const minScore = Number.isFinite(Number(options.minScore)) ? Number(options.minScore) : 60;
+    const topAlternatives = Math.max(0, Math.min(Number(options.topAlternatives || 3), 20));
+
+    const settled = await Promise.allSettled(
+      resources.map(async (resource) => {
+        const skuKey = String(resource.sku).toLowerCase();
+        const regionKey = String(resource.region).toLowerCase();
+        const numCount = Number(resource.count);
+
+        // Fetch all score rows for the region so we can compute alternatives.
+        const scoreRows = await getCapacityScoreSummary({ region: resource.region });
+
+        const match = scoreRows.find(
+          (r) =>
+            String(r.sku || '').toLowerCase() === skuKey &&
+            String(r.region || '').toLowerCase() === regionKey
+        );
+
+        const numericScore = match ? (PREFLIGHT_SCORE_NUMERIC[match.score] || 20) : 20;
+        const quotaHeadroom = match ? (match.totalQuotaAvailable || 0) : 0;
+
+        let verdict;
+        if (numericScore < 40 || quotaHeadroom < numCount) {
+          verdict = 'no-go';
+        } else if (numericScore >= minScore && quotaHeadroom >= numCount) {
+          verdict = 'go';
+        } else {
+          verdict = 'warn';
+        }
+
+        const alternatives = scoreRows
+          .filter(
+            (r) =>
+              String(r.region || '').toLowerCase() === regionKey &&
+              String(r.sku || '').toLowerCase() !== skuKey
+          )
+          .sort(
+            (a, b) =>
+              (PREFLIGHT_SCORE_NUMERIC[b.score] || 0) - (PREFLIGHT_SCORE_NUMERIC[a.score] || 0)
+          )
+          .slice(0, topAlternatives)
+          .map((r) => ({
+            sku: r.sku,
+            region: r.region,
+            score: PREFLIGHT_SCORE_NUMERIC[r.score] || 0,
+            scoreLabel: r.score,
+            quotaHeadroom: r.totalQuotaAvailable || 0
+          }));
+
+        return {
+          sku: resource.sku,
+          region: resource.region,
+          count: numCount,
+          score: numericScore,
+          scoreLabel: match ? match.score : 'Low',
+          quotaHeadroom,
+          verdict,
+          reason: match ? match.reason : 'No capacity data found for this SKU and region.',
+          alternatives
+        };
+      })
+    );
+
+    const resourceResults = settled.map((result, i) => {
+      if (result.status === 'fulfilled') {
+        return result.value;
+      }
+      return {
+        sku: resources[i].sku,
+        region: resources[i].region,
+        count: Number(resources[i].count),
+        score: 0,
+        scoreLabel: 'Low',
+        quotaHeadroom: 0,
+        verdict: 'no-go',
+        reason: `Evaluation failed: ${result.reason?.message || 'Unknown error'}`,
+        alternatives: []
+      };
+    });
+
+    const go = resourceResults.every((r) => r.verdict !== 'no-go');
+
+    return res.json({ ok: true, go, resources: resourceResults });
+  } catch (err) {
+    sendErrorResponse(res, {
+      clientMessage: 'Failed to evaluate preflight capacity check.',
+      err,
+      scope: 'api/capacity/preflight'
+    });
+  }
+});
+
 app.get('/api/paas-availability', async (req, res) => {
   try {
     const result = await getPaaSAvailabilitySnapshot({
