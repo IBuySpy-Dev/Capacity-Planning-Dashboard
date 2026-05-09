@@ -107,8 +107,9 @@ jobs:
           echo "  webAppUrl:      $webAppUrl"
 
       - name: Push resource vars to GitHub
+        continue-on-error: true  # GITHUB_TOKEN cannot write repo variables; requires PAT. See issue #83.
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           REPO="${{ github.repository }}"
 
