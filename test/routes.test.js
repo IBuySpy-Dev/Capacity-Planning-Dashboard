@@ -168,11 +168,12 @@ test('GET /api/admin/config returns 200 with sanitized config shape when AUTH_EN
   assert.ok(config.ingestion, 'config.ingestion section should be present');
   assert.ok(['never', 'success', 'error'].includes(config.ingestion.lastRunStatus), 'lastRunStatus must be never/success/error');
   assert.equal(typeof config.ingestion.inProgress, 'boolean', 'ingestion.inProgress must be a boolean');
+  assert.equal(typeof config.ingestion.regionErrorCount, 'number', 'regionErrorCount must be a number');
 });
 
 // ─── GET /api/admin/config — ingestion status section ───────────────────────
 
-test('GET /api/admin/config ingestion section present with correct shape on cold start', async () => {
+test('GET /api/admin/config ingestion section present with correct cold-start shape', async () => {
   const res = await request(app).get('/api/admin/config');
   assert.equal(res.status, 200);
   const { ingestion } = res.body.config;
@@ -182,6 +183,8 @@ test('GET /api/admin/config ingestion section present with correct shape on cold
   assert.equal(ingestion.lastRunRecords, null, 'lastRunRecords should be null before any ingestion run');
   assert.equal(ingestion.lastErrorMessage, null, 'lastErrorMessage should be null before any ingestion run');
   assert.equal(typeof ingestion.inProgress, 'boolean', 'inProgress must be a boolean');
+  assert.equal(typeof ingestion.regionErrorCount, 'number', 'regionErrorCount must be a number');
+  assert.equal(ingestion.regionErrorCount, 0, 'regionErrorCount should be 0 on cold start');
 });
 
 
