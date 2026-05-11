@@ -326,6 +326,10 @@ This script will:
 2. **CA Policy Check** - Diagnose and fix Conditional Access issues (if needed)
 3. **Deploy** - Trigger the production deployment workflow
 
+Shared bootstrap helpers now live in `scripts\BootstrapHelpers.psm1`, so both primary bootstrap scripts reuse the same CLI execution, GitHub variable, and formatted output logic.
+
+Set `$env:BOOTSTRAP_DEBUG = 'true'` before running either bootstrap script to log each Azure/GitHub CLI command, full JSON responses, and per-step timings.
+
 **Options:**
 ```powershell
 # Skip OIDC bootstrap if already done
@@ -454,6 +458,7 @@ az monitor app-insights query \
   - `scripts/bootstrap-github-oidc.ps1` - Initial OIDC setup
   - `scripts/bootstrap-ca-policy.ps1` - CA policy configuration
   - `scripts/bootstrap-and-deploy.ps1` - Complete orchestration
+  - `scripts/BootstrapHelpers.psm1` - Shared bootstrap CLI, output, and debug helpers
 
 **Execution time:** 3 minutes
 
@@ -1355,3 +1360,4 @@ To add subscription id/name + SKU metadata columns used by charts and family sum
 	-UseEntra \
 	-EntraUser "<entra-upn>"
 ```
+
