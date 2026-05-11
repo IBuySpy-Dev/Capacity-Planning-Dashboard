@@ -65,6 +65,15 @@ Key parameters set there:
 | `entraClientId` | App registration client ID for Entra auth |
 | `entraAdminGroupId` | Entra group whose members get Admin access in the dashboard |
 | `quotaManagementGroupId` | Root management group ID for quota discovery |
+| `webReaderSubscriptionIds` | Subscription IDs where the web app MI gets Reader for subscription discovery |
+| `webQuotaWriterSubscriptionIds` | Subscription IDs where the web app MI gets GroupQuota Request Operator |
+| `workerSubscriptionRbacSubscriptionIds` | Subscription IDs where worker MI gets Compute/Cost/Billing reader roles |
+
+!!! warning "Subscription RBAC arrays must be populated"
+    `infra/bicep/prod.bicepparam` includes `webReaderSubscriptionIds`,
+    `webQuotaWriterSubscriptionIds`, and `workerSubscriptionRbacSubscriptionIds`.
+    These arrays drive subscription-scoped RBAC modules in `main.bicep`. If left as
+    `[]`, no subscription-level RBAC assignments are created.
 
 ---
 
