@@ -585,11 +585,21 @@ function appendCommonSqlFilters(filters, request, options = {}) {
   return where;
 }
 
-async function getCapacityRows(filters) {
-  const pool = await getSqlPool();
+function getMockCapacityRows(filters = {}) {
+  return applyFilters(applyRegionPreset(mockRows.map(normalizeCapacityRow), filters.regionPreset), filters);
+}
+
+async function getCapacityRows(filters = {}) {
+  let pool;
+  try {
+    pool = await getSqlPool();
+  } catch (err) {
+    console.warn('[capacity] Failed to load SQL capacity rows; falling back to mock data.', err?.message || err);
+    return getMockCapacityRows(filters);
+  }
 
   if (!pool) {
-    return applyFilters(applyRegionPreset(mockRows.map(normalizeCapacityRow), filters.regionPreset), filters);
+    return getMockCapacityRows(filters);
   }
 
   const capacitySnapshotColumns = await getCapacitySnapshotColumnSet(pool);
@@ -635,7 +645,7 @@ async function getCapacityRowsPaginated(filters) {
   const pool = await getSqlPool();
 
   if (!pool) {
-    const allRows = applyFilters(applyRegionPreset(mockRows.map(normalizeCapacityRow), filters.regionPreset), filters);
+    const allRows = getMockCapacityRows(filters);
     const total = allRows.length;
     const pagedRows = allRows.slice(offset, offset + pageSize);
     const facets = {
