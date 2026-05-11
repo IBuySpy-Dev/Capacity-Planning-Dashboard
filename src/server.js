@@ -39,6 +39,7 @@ const {
   getCapacityRowsPaginated,
   getCapacityAnalyticsSummary,
   getSubscriptions,
+  SUBSCRIPTIONS_BACKEND_NOT_READY_CODE,
   getSubscriptionSummary,
   getCapacityTrends,
   getFamilySummary,
@@ -1940,26 +1941,22 @@ async function ensureDatabasePrincipalAccess(pool, principalName, roles = []) {
 
 app.get('/healthz', async (_, res) => {
   const checks = {};
-  let httpStatus = 200;
 
-  // DB connectivity check — SELECT 1 with a short request timeout
   try {
     const pool = await getSqlPool();
     if (!pool) {
       checks.db = { status: 'unconfigured' };
     } else {
       const req = pool.request();
-      req.timeout = 3000; // ms — fail fast so the probe doesn't block App Service health check
+      req.timeout = 3000;
       await req.query('SELECT 1 AS ping');
       checks.db = { status: 'ok' };
     }
   } catch (err) {
     checks.db = { status: 'error', message: err.message };
-    httpStatus = 503;
   }
 
-  const overall = httpStatus === 200 ? 'ok' : 'degraded';
-  res.status(httpStatus).json({ status: overall, service: 'capacity-dashboard-api', checks });
+  res.status(200).json({ status: 'ok', service: 'capacity-dashboard-api', checks });
 });
 
 app.get('/api/auth/me', (req, res) => {
@@ -2257,10 +2254,13 @@ app.get('/api/subscriptions', async (req, res) => {
     });
     res.json({ rows });
   } catch (err) {
+    const isBackendNotReady = err?.code === SUBSCRIPTIONS_BACKEND_NOT_READY_CODE;
     sendErrorResponse(res, {
+      status: isBackendNotReady ? 503 : 500,
       clientMessage: 'Failed to retrieve subscriptions.',
       err,
       scope: 'api/subscriptions',
+      exposeMessage: isBackendNotReady,
       context: { limit: req.query.limit, search: req.query.search ? '[redacted]' : undefined }
     });
   }
