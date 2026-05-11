@@ -1,5 +1,5 @@
 const sql = require('mssql');
-const { getSqlPool, getSubscriptionsFromTable, getLatestLivePlacementSnapshots, ensureVmSkuCatalogSchema } = require('../store/sql');
+const { getSqlPool, resetSqlPool, getSubscriptionsFromTable, getLatestLivePlacementSnapshots, ensureVmSkuCatalogSchema } = require('../store/sql');
 const { mockRows } = require('../store/mockCapacity');
 const { getRegionsForPreset } = require('../config/regionPresets');
 const { CapacityDetailDTO, SubscriptionSummaryDTO, FamilySummaryDTO, TrendDTO, PaginationDTO } = require('../models/dtos');
@@ -419,15 +419,24 @@ async function getCapacitySnapshotColumnSet(pool) {
 }
 
 async function getObjectColumnSet(pool, objectName) {
-  const result = await pool.request()
-    .input('objectName', sql.NVarChar(256), objectName)
-    .query(`
-      SELECT name
-      FROM sys.columns
-      WHERE object_id = OBJECT_ID(@objectName)
-    `);
+  try {
+    const result = await pool.request()
+      .input('objectName', sql.NVarChar(256), objectName)
+      .query(`
+        SELECT name
+        FROM sys.columns
+        WHERE object_id = OBJECT_ID(@objectName)
+      `);
 
-  return new Set((result.recordset || []).map((row) => String(row.name || '').trim()).filter(Boolean));
+    return new Set((result.recordset || []).map((row) => String(row.name || '').trim()).filter(Boolean));
+  } catch (err) {
+    const message = String(err?.message || '').toLowerCase();
+    if (message.includes('invalid object name')) {
+      console.warn(`[capacity] Missing SQL object while loading columns for ${objectName}; returning empty column set.`);
+      return new Set();
+    }
+    throw err;
+  }
 }
 
 function buildCapacityLatestSelect(columns, tableAlias = '') {
@@ -461,6 +470,38 @@ function buildLatestSnapshotBatchCte() {
       FROM dbo.CapacitySnapshot
     )
   `;
+}
+
+const SUBSCRIPTIONS_BACKEND_NOT_READY_CODE = 'SUBSCRIPTIONS_BACKEND_NOT_READY';
+const RETRYABLE_SQL_ERROR_CODES = new Set(['ECONNCLOSED', 'ENOTOPEN', 'ESOCKET', 'ETIMEOUT']);
+
+function createSubscriptionsBackendNotReadyError() {
+  const err = new Error('Subscriptions are temporarily unavailable because required SQL schema objects are not ready. Run database bootstrap or /internal/db/ensure-phase3-schema, then retry.');
+  err.code = SUBSCRIPTIONS_BACKEND_NOT_READY_CODE;
+  return err;
+}
+
+function isRetryableSqlConnectionError(err) {
+  const code = String(err?.code || '').toUpperCase();
+  if (RETRYABLE_SQL_ERROR_CODES.has(code)) {
+    return true;
+  }
+
+  const message = String(err?.message || '').toLowerCase();
+  return message.includes('connection is closed')
+    || message.includes('connection not yet open')
+    || message.includes('socket')
+    || message.includes('timed out')
+    || message.includes('failed to connect')
+    || message.includes('closed connection');
+}
+
+function isMissingCapacitySnapshotError(err) {
+  const message = String(err?.message || '').toLowerCase();
+  return message.includes("invalid object name 'dbo.capacitysnapshot'")
+    || message.includes('invalid object name "dbo.capacitysnapshot"')
+    || message.includes("invalid object name 'capacitysnapshot'")
+    || message.includes('invalid object name "capacitysnapshot"');
 }
 
 function buildCapacitySnapshotHistorySelect(columns) {
@@ -679,14 +720,23 @@ async function getCapacityRowsPaginated(filters) {
   };
 }
 
-async function getSubscriptions({ search, limit } = {}) {
+async function getSubscriptionsCore({ search, limit } = {}) {
   const pool = await getSqlPool();
   if (!pool) {
     return [{ subscriptionId: 'legacy-data', subscriptionName: 'Legacy data' }];
   }
 
+  const tableRows = await getSubscriptionsFromTable({ search, limit });
+  if (Array.isArray(tableRows)) {
+    return tableRows;
+  }
+
   const maxLimit = Math.max(10, Math.min(Number(limit || 500), 1000));
   const capacitySnapshotColumns = await getCapacitySnapshotColumnSet(pool);
+  if (capacitySnapshotColumns.size === 0) {
+    console.warn('[getSubscriptions] CapacitySnapshot table is missing or has no columns; returning empty subscription list.');
+    return [];
+  }
   const hasSubscriptionId = capacitySnapshotColumns.has('subscriptionId');
   const hasSubscriptionName = capacitySnapshotColumns.has('subscriptionName');
   const subscriptionIdExpr = hasSubscriptionId
@@ -720,11 +770,33 @@ async function getSubscriptions({ search, limit } = {}) {
     ORDER BY ${subscriptionNameExpr} ASC
   `;
 
-  const result = await request.query(query);
-  return result.recordset.map((r) => ({
-    subscriptionId: r.subscriptionId,
-    subscriptionName: r.subscriptionName
-  }));
+  try {
+    const result = await request.query(query);
+    return result.recordset.map((r) => ({
+      subscriptionId: r.subscriptionId,
+      subscriptionName: r.subscriptionName
+    }));
+  } catch (err) {
+    if (isMissingCapacitySnapshotError(err)) {
+      console.warn('[getSubscriptions] CapacitySnapshot table query failed because table does not exist; returning empty subscription list.', err?.message || err);
+      return [];
+    }
+    throw err;
+  }
+}
+
+async function getSubscriptions(filters = {}, attempt = 0) {
+  try {
+    return await getSubscriptionsCore(filters);
+  } catch (err) {
+    if (attempt >= 1 || !isRetryableSqlConnectionError(err)) {
+      throw err;
+    }
+
+    console.warn('[getSubscriptions] SQL pool appears stale; resetting and retrying once.');
+    await resetSqlPool();
+    return getSubscriptions(filters, attempt + 1);
+  }
 }
 
 async function getSubscriptionSummary(filters) {
@@ -1429,6 +1501,7 @@ module.exports = {
   getCapacityRowsPaginated,
   getCapacityAnalyticsSummary,
   getSubscriptions,
+  SUBSCRIPTIONS_BACKEND_NOT_READY_CODE,
   getSubscriptionSummary,
   getCapacityTrends,
   getFamilySummary,
