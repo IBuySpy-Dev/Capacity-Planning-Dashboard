@@ -27,11 +27,19 @@
     Example: 'https://<web-app-name>.azurewebsites.net/auth/callback'
     Leave empty to skip.
 
+.PARAMETER KeyVaultName
+    Optional Azure Key Vault name. When provided, the generated client secret
+    is stored as the 'capdash-entra-client-secret' secret and the script prints
+    the resulting secret URI for bootstrap automation.
+
 .EXAMPLE
     .\New-EntraApp.ps1
 
 .EXAMPLE
     .\New-EntraApp.ps1 -ProductionRedirectUri 'https://<web-app-name>.azurewebsites.net/auth/callback'
+
+.EXAMPLE
+    .\New-EntraApp.ps1 -ProductionRedirectUri 'https://<web-app-name>.azurewebsites.net/auth/callback' -KeyVaultName 'kv-capdash-prod-prod01'
 
 .NOTES
     Requires the Microsoft.Graph PowerShell SDK.
@@ -45,7 +53,8 @@
 param(
     [string]$AppName = 'Capacity Planning Dashboard',
     [string]$LocalRedirectUri = 'http://localhost:3000/auth/callback',
-    [string]$ProductionRedirectUri = ''
+    [string]$ProductionRedirectUri = '',
+    [string]$KeyVaultName = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -132,15 +141,38 @@ $secretParams = @{
 }
 $secret = Add-MgApplicationPassword -ApplicationId $app.Id -BodyParameter $secretParams
 
+$entraClientSecretKvUri = ''
+if ($KeyVaultName) {
+    Write-Host "Storing client secret in Key Vault '$KeyVaultName'..." -ForegroundColor Cyan
+    $entraClientSecretKvUri = az keyvault secret set `
+        --vault-name $KeyVaultName `
+        --name 'capdash-entra-client-secret' `
+        --value $secret.SecretText `
+        --query id `
+        -o tsv
+    if (-not $entraClientSecretKvUri) {
+        throw "Failed to store the Entra client secret in Key Vault '$KeyVaultName'."
+    }
+    Write-Host "Client secret stored in Key Vault." -ForegroundColor Green
+}
+
 # ── Output ───────────────────────────────────────────────────────────────────
 Write-Host "`n============================================================" -ForegroundColor Green
-Write-Host " App registration complete!  Copy these values into .env.local:" -ForegroundColor Green
+if ($KeyVaultName) {
+    Write-Host " App registration complete!  Use these values for bootstrap:" -ForegroundColor Green
+} else {
+    Write-Host " App registration complete!  Copy these values into .env.local:" -ForegroundColor Green
+}
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "AUTH_ENABLED=true"
 Write-Host "ENTRA_CLIENT_ID=$($app.AppId)"
 Write-Host "ENTRA_TENANT_ID=$tenantId"
-Write-Host "ENTRA_CLIENT_SECRET=$($secret.SecretText)"
+if ($KeyVaultName) {
+    Write-Host "ENTRA_CLIENT_SECRET_KEYVAULT_SECRET_URI=$entraClientSecretKvUri"
+} else {
+    Write-Host "ENTRA_CLIENT_SECRET=$($secret.SecretText)"
+}
 Write-Host "ADMIN_GROUP_ID=<paste the Object ID of your admin Entra group here>"
 Write-Host "AUTH_REDIRECT_URI=$LocalRedirectUri"
 Write-Host "SESSION_SECRET=$(([System.Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))))"
@@ -148,22 +180,41 @@ Write-Host ""
 Write-Host "------------------------------------------------------------" -ForegroundColor DarkGray
 Write-Host "App Object ID (for portal/manifest edits): $($app.Id)" -ForegroundColor DarkGray
 Write-Host "Service Principal Object ID:               $($sp.Id)" -ForegroundColor DarkGray
+if ($KeyVaultName) {
+    Write-Host "Key Vault secret URI:                      $entraClientSecretKvUri" -ForegroundColor DarkGray
+}
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
-Write-Host "  1. Paste the values above into your .env.local file."
-Write-Host "  2. Find your admin Entra group Object ID in the Azure portal"
-Write-Host "     (Entra ID > Groups > <your group> > Overview > Object ID)"
-Write-Host "     and set ADMIN_GROUP_ID."
-Write-Host "  3. Set AUTH_ENABLED=true in .env.local when ready to test locally."
+if ($KeyVaultName) {
+    Write-Host "  1. Pass -EntraClientSecretKvUri '$entraClientSecretKvUri' to scripts/bootstrap-github-oidc.ps1."
+    Write-Host "  2. Find your admin Entra group Object ID in the Azure portal"
+    Write-Host "     (Entra ID > Groups > <your group> > Overview > Object ID)"
+    Write-Host "     and set ADMIN_GROUP_ID."
+    Write-Host "  3. Use docs/entra-keyvault-setup.md for the end-to-end bootstrap flow."
+} else {
+    Write-Host "  1. Paste the values above into your .env.local file."
+    Write-Host "  2. Find your admin Entra group Object ID in the Azure portal"
+    Write-Host "     (Entra ID > Groups > <your group> > Overview > Object ID)"
+    Write-Host "     and set ADMIN_GROUP_ID."
+    Write-Host "  3. Set AUTH_ENABLED=true in .env.local when ready to test locally."
+}
 if ($ProductionRedirectUri) {
     Write-Host "  4. Add the following App Service settings for production:"
     Write-Host "       AUTH_ENABLED=true"
     Write-Host "       ENTRA_CLIENT_ID=$($app.AppId)"
     Write-Host "       ENTRA_TENANT_ID=$tenantId"
-    Write-Host "       ENTRA_CLIENT_SECRET=<same secret>"
+    if ($KeyVaultName) {
+        Write-Host "       ENTRA_CLIENT_SECRET=<resolved from Key Vault reference via Bicep/bootstrap>"
+    } else {
+        Write-Host "       ENTRA_CLIENT_SECRET=<same secret>"
+    }
     Write-Host "       ADMIN_GROUP_ID=<group Object ID>"
     Write-Host "       AUTH_REDIRECT_URI=$ProductionRedirectUri"
     Write-Host "       SESSION_SECRET=<generate a new one for production>"
 }
 Write-Host ""
-Write-Host "IMPORTANT: The client secret is shown only once. Store it securely." -ForegroundColor Red
+if ($KeyVaultName) {
+    Write-Host "IMPORTANT: The client secret was stored in Key Vault. Pass the URI above to bootstrap-github-oidc.ps1." -ForegroundColor Red
+} else {
+    Write-Host "IMPORTANT: The client secret is shown only once. Store it securely." -ForegroundColor Red
+}
