@@ -152,40 +152,17 @@ jobs:
           cp -r node_modules deployment/
 
           cd deployment
-          zip -r ../deployment.zip .
-          echo "✓ Package created ($(du -sh ../deployment.zip | cut -f1))"
-
-      - name: Clear stale Run-From-Package state
-        # OneDeploy stores a zip in SitePackages/ and a packagename.txt pointer.
-        # On each restart the host tries to mount the zip; when it fails it writes
-        # a sentinel that aborts startup. Clear both so the host exits
-        # package-mount mode fully before the new zip lands.
-        run: |
-          CREDS=$(az webapp deployment list-publishing-credentials \
-            --name "${{ env.AZURE_WEBAPP_NAME }}" \
-            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --subscription "${{ vars.AZURE_SUBSCRIPTION_ID }}" \
-            --query "{u:publishingUserName,p:publishingPassword}" -o json)
-          PUB_USER=$(echo "$CREDS" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['u'])")
-          PUB_PASS=$(echo "$CREDS" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['p'])")
-          SCM="https://${{ env.AZURE_WEBAPP_NAME }}.scm.azurewebsites.net"
-          AUTH="-u $PUB_USER:$PUB_PASS"
-
-          S1=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
-            "$SCM/api/vfs/site/wwwroot/FAILED%20TO%20INITIALIZE%20RUN%20FROM%20PACKAGE.txt" $AUTH)
-          echo "Sentinel DELETE: $S1"
-
-          S2=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
-            "$SCM/api/vfs/data/SitePackages/" $AUTH)
-          echo "SitePackages DELETE: $S2"
+          zip -r ../deploy.zip .
+          echo "✓ Package created ($(du -sh ../deploy.zip | cut -f1))"
 
       - name: Deploy to Azure App Service
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          package: deployment.zip
-          resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
-          deployment-method: zipDeploy
+        run: |
+          az webapp deploy \
+            --name ${{ vars.AZURE_WEBAPP_NAME }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
+            --src-path ./deploy.zip \
+            --type zip \
+            --async false
 
       # ── SQL steps ─────────────────────────────────────────────────────────────
       # go-sqlcmd supports ActiveDirectoryDefault — uses the OIDC-acquired
