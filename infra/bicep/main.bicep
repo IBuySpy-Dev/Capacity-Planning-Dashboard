@@ -371,9 +371,9 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
           name: 'AUTH_ENABLED'
           value: string(authEnabled)
         }
-        // Only emit ENTRA_* and ADMIN_GROUP_ID when the param is non-empty so that
-        // running `az deployment group create` without these params does not wipe
-        // the live values that were set outside of Bicep (e.g. via deploy.yml).
+        // ⚠️ ARM full-replaces siteConfig.appSettings on every deployment.
+        // Omitting a setting = deleting it from Azure. When authEnabled is true,
+        // the validation guard below ensures ENTRA_ params are always provided.
         ...(!empty(entraTenantId) ? [{ name: 'ENTRA_TENANT_ID', value: entraTenantId }] : [])
         ...(!empty(entraClientId) ? [{ name: 'ENTRA_CLIENT_ID', value: entraClientId }] : [])
         ...(!empty(entraClientSecretKeyVaultReference) ? [{ name: 'ENTRA_CLIENT_SECRET', value: entraClientSecretKeyVaultReference }] : [])
