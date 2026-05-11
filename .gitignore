@@ -18,7 +18,7 @@ artifacts/
 # Secrets / local config
 .env
 .env.*
-!.env.sample
+!.env.example
 *.local
 *.secret
 secrets.*

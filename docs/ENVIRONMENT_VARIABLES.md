@@ -1,7 +1,7 @@
 # Environment Variables Reference
 
 All environment variables recognised by the Capacity Planning Dashboard.
-Copy `.env.sample` to `.env` and fill in the values for local development.
+Copy `.env.example` to `.env` and fill in the values for local development.
 **Never commit `.env` or any file containing real secrets.**
 
 ---

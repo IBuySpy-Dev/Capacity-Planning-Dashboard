@@ -40,7 +40,7 @@ docker compose ps   # should show "healthy"
 Copy the sample env file:
 
 ```bash
-cp .env.sample .env
+cp .env.example .env
 ```
 
 Edit `.env` with these minimum values for local dev (no auth, local SQL):
@@ -69,7 +69,7 @@ QUOTA_MANAGEMENT_GROUP_ID=             # your mgmt group ID or leave empty
 ```
 
 !!! note "Never commit `.env`"
-    `.env` is in `.gitignore`. Only `.env.sample` is committed.
+    `.env` is in `.gitignore`. Only `.env.example` is committed.
 
 ---
 

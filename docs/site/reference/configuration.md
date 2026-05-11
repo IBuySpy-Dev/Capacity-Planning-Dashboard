@@ -126,4 +126,4 @@ The App Service managed identity must have **Key Vault Secrets User** role on th
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | Application Insights connection string — **Key Vault reference in production** |
 
 !!! tip
-    See `.env.sample` at the repo root for a fully commented template of all variables with their defaults.
+    See `.env.example` at the repo root for a fully commented template of all variables with their defaults.
