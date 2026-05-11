@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node --test",
+    "test": "node --test test/*.test.js",
     "bench:placement-score": "node scripts/benchmark-placement-score.js",
     "start:e2e": "node scripts/start-e2e-server.js",
     "e2e": "npx playwright test"
