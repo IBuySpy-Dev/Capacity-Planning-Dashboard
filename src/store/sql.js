@@ -168,14 +168,6 @@ async function tableExists(pool, tableName) {
   return Boolean(result.recordset && result.recordset.length > 0);
 }
 
-function isSchemaPermissionError(err) {
-  const message = String(err?.message || '').toLowerCase();
-  return message.includes('create table permission denied')
-    || message.includes('alter table permission denied')
-    || message.includes('create index permission denied')
-    || message.includes('permission denied in database');
-}
-
 async function insertCapacitySnapshots(rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
     return 0;
@@ -320,86 +312,11 @@ async function getSubscriptionsFromTable({ search, limit } = {}) {
 }
 
 async function ensureSubscriptionsTableSchema(pool) {
-  const createScript = `
-    IF OBJECT_ID('dbo.Subscriptions', 'U') IS NULL
-    BEGIN
-      CREATE TABLE dbo.Subscriptions (
-        subscriptionId NVARCHAR(64) NOT NULL,
-        subscriptionName NVARCHAR(256) NOT NULL,
-        updatedAtUtc DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
-        CONSTRAINT PK_Subscriptions PRIMARY KEY (subscriptionId)
-      );
-    END;
-
-    IF COL_LENGTH('dbo.Subscriptions', 'subscriptionName') IS NULL
-      EXEC('ALTER TABLE dbo.Subscriptions ADD subscriptionName NVARCHAR(256) NOT NULL CONSTRAINT DF_Subscriptions_SubscriptionName DEFAULT (''Unknown subscription'')');
-
-    IF COL_LENGTH('dbo.Subscriptions', 'updatedAtUtc') IS NULL
-      EXEC('ALTER TABLE dbo.Subscriptions ADD updatedAtUtc DATETIME2 NOT NULL CONSTRAINT DF_Subscriptions_UpdatedAtUtc DEFAULT GETUTCDATE()');
-  `;
-
-  const backfillScript = `
-    MERGE dbo.Subscriptions AS tgt
-    USING (
-      SELECT
-        subscriptionId,
-        MAX(subscriptionName) AS subscriptionName,
-        MAX(capturedAtUtc) AS updatedAtUtc
-      FROM dbo.CapacitySnapshot
-      WHERE subscriptionId IS NOT NULL
-        AND subscriptionId <> 'legacy-data'
-      GROUP BY subscriptionId
-    ) AS src
-    ON tgt.subscriptionId = src.subscriptionId
-    WHEN MATCHED THEN
-      UPDATE SET subscriptionName = src.subscriptionName, updatedAtUtc = src.updatedAtUtc
-    WHEN NOT MATCHED THEN
-      INSERT (subscriptionId, subscriptionName, updatedAtUtc)
-      VALUES (src.subscriptionId, src.subscriptionName, src.updatedAtUtc);
-  `;
-
-  await pool.request().query(createScript);
-  await pool.request().query(backfillScript);
+  return tableExists(pool, 'dbo.Subscriptions');
 }
 
 async function ensureCapacityScoreSnapshotSchema(pool) {
-  const createScript = `
-    IF OBJECT_ID('dbo.CapacityScoreSnapshot', 'U') IS NULL
-    BEGIN
-      CREATE TABLE dbo.CapacityScoreSnapshot (
-        scoreSnapshotId BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-        capturedAtUtc DATETIME2 NOT NULL,
-        region NVARCHAR(64) NOT NULL,
-        skuName NVARCHAR(128) NOT NULL,
-        skuFamily NVARCHAR(128) NOT NULL,
-        subscriptionCount INT NOT NULL,
-        okRows INT NOT NULL,
-        limitedRows INT NOT NULL,
-        constrainedRows INT NOT NULL,
-        totalQuotaAvailable INT NOT NULL,
-        utilizationPct INT NOT NULL,
-        score NVARCHAR(16) NOT NULL,
-        reason NVARCHAR(512) NOT NULL,
-        latestSourceCapturedAtUtc DATETIME2 NULL
-      )
-    END;
-  `;
-
-  const createIndexScript = `
-    IF NOT EXISTS (
-      SELECT 1
-      FROM sys.indexes
-      WHERE name = 'IX_CapacityScoreSnapshot_CapturedRegionSku'
-        AND object_id = OBJECT_ID('dbo.CapacityScoreSnapshot')
-    )
-    BEGIN
-      CREATE INDEX IX_CapacityScoreSnapshot_CapturedRegionSku
-        ON dbo.CapacityScoreSnapshot (capturedAtUtc DESC, region, skuName);
-    END;
-  `;
-
-  await pool.request().query(createScript);
-  await pool.request().query(createIndexScript);
+  return tableExists(pool, 'dbo.CapacityScoreSnapshot');
 }
 
 async function insertCapacityScoreSnapshots(rows) {
@@ -412,18 +329,8 @@ async function insertCapacityScoreSnapshots(rows) {
     throw new Error('SQL connection is not configured for capacity score history.');
   }
 
-  try {
-    if (!(await tableExists(pool, 'dbo.CapacityScoreSnapshot'))) {
-      return 0;
-    }
-
-    await ensureCapacityScoreSnapshotSchema(pool);
-  } catch (err) {
-    if (isSchemaPermissionError(err)) {
-      return 0;
-    }
-
-    throw err;
+  if (!(await ensureCapacityScoreSnapshotSchema(pool))) {
+    return 0;
   }
 
   const transaction = new sql.Transaction(pool);
@@ -470,18 +377,8 @@ async function getCapacityScoreSnapshotHistory(filters = {}) {
     return [];
   }
 
-  try {
-    if (!(await tableExists(pool, 'dbo.CapacityScoreSnapshot'))) {
-      return [];
-    }
-
-    await ensureCapacityScoreSnapshotSchema(pool);
-  } catch (err) {
-    if (isSchemaPermissionError(err)) {
-      return [];
-    }
-
-    throw err;
+  if (!(await ensureCapacityScoreSnapshotSchema(pool))) {
+    return [];
   }
 
   const days = Math.max(1, Math.min(Number(filters.days || 30), 365));
@@ -732,65 +629,7 @@ async function listQuotaCandidateRuns(filters = {}) {
 }
 
 async function ensureDashboardErrorLogSchema(pool) {
-  const createScript = `
-    IF OBJECT_ID('dbo.DashboardErrorLog', 'U') IS NULL
-    BEGIN
-      CREATE TABLE dbo.DashboardErrorLog (
-        errorLogId BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-        errorSource NVARCHAR(64) NOT NULL,
-        errorType NVARCHAR(128) NOT NULL,
-        errorMessage NVARCHAR(2048) NOT NULL,
-        stackTrace NVARCHAR(MAX) NULL,
-        occurredAtUtc DATETIME2 NOT NULL,
-        severity NVARCHAR(16) NOT NULL,
-        context NVARCHAR(MAX) NULL,
-        affectedRegion NVARCHAR(64) NULL,
-        affectedSku NVARCHAR(128) NULL,
-        affectedDesiredCount INT NULL,
-        isResolved BIT NOT NULL DEFAULT 0,
-        resolvedAtUtc DATETIME2 NULL,
-        resolutionNotes NVARCHAR(512) NULL,
-        requestId NVARCHAR(36) NULL
-      )
-    END;
-
-    IF NOT EXISTS (
-      SELECT 1 FROM sys.columns
-      WHERE object_id = OBJECT_ID('dbo.DashboardErrorLog')
-        AND name = 'requestId'
-    )
-    BEGIN
-      ALTER TABLE dbo.DashboardErrorLog ADD requestId NVARCHAR(36) NULL;
-    END;
-  `;
-
-  const createIndexScript = `
-    IF NOT EXISTS (
-      SELECT 1
-      FROM sys.indexes
-      WHERE name = 'IX_DashboardErrorLog_OccurredAt'
-        AND object_id = OBJECT_ID('dbo.DashboardErrorLog')
-    )
-    BEGIN
-      CREATE INDEX IX_DashboardErrorLog_OccurredAt
-        ON dbo.DashboardErrorLog (occurredAtUtc DESC, errorSource, severity);
-    END;
-
-    IF NOT EXISTS (
-      SELECT 1
-      FROM sys.indexes
-      WHERE name = 'IX_DashboardErrorLog_Unresolved'
-        AND object_id = OBJECT_ID('dbo.DashboardErrorLog')
-    )
-    BEGIN
-      CREATE INDEX IX_DashboardErrorLog_Unresolved
-        ON dbo.DashboardErrorLog (isResolved, occurredAtUtc DESC)
-        WHERE isResolved = 0;
-    END;
-  `;
-
-  await pool.request().query(createScript);
-  await pool.request().query(createIndexScript);
+  return tableExists(pool, 'dbo.DashboardErrorLog');
 }
 
 async function insertDashboardErrorLog(entry = {}) {
@@ -799,7 +638,9 @@ async function insertDashboardErrorLog(entry = {}) {
     return 0;
   }
 
-  await ensureDashboardErrorLogSchema(pool);
+  if (!(await ensureDashboardErrorLogSchema(pool))) {
+    return 0;
+  }
 
   const request = pool.request();
   request.input('errorSource', sql.NVarChar(64), entry.source || 'unknown');
@@ -834,7 +675,9 @@ async function listDashboardErrorLogs(options = {}) {
     return [];
   }
 
-  await ensureDashboardErrorLogSchema(pool);
+  if (!(await ensureDashboardErrorLogSchema(pool))) {
+    return [];
+  }
 
   const limit = Math.max(5, Math.min(Number(options.limit || 50), 200));
   const onlyUnresolved = Boolean(options.onlyUnresolved);
@@ -912,44 +755,7 @@ async function listDashboardErrorLogs(options = {}) {
 }
 
 async function ensureDashboardOperationLogSchema(pool) {
-  const createScript = `
-    IF OBJECT_ID('dbo.DashboardOperationLog', 'U') IS NULL
-    BEGIN
-      CREATE TABLE dbo.DashboardOperationLog (
-        operationLogId BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-        operationType NVARCHAR(64) NOT NULL,
-        operationName NVARCHAR(128) NOT NULL,
-        status NVARCHAR(16) NOT NULL,
-        triggerSource NVARCHAR(32) NOT NULL,
-        startedAtUtc DATETIME2 NOT NULL,
-        completedAtUtc DATETIME2 NULL,
-        durationMs INT NULL,
-        rowsAffected INT NULL,
-        subscriptionCount INT NULL,
-        requestedDesiredCount INT NULL,
-        effectiveDesiredCount INT NULL,
-        regionPreset NVARCHAR(64) NULL,
-        note NVARCHAR(512) NULL,
-        errorMessage NVARCHAR(2048) NULL
-      )
-    END;
-  `;
-
-  const createIndexScript = `
-    IF NOT EXISTS (
-      SELECT 1
-      FROM sys.indexes
-      WHERE name = 'IX_DashboardOperationLog_StartedAt'
-        AND object_id = OBJECT_ID('dbo.DashboardOperationLog')
-    )
-    BEGIN
-      CREATE INDEX IX_DashboardOperationLog_StartedAt
-        ON dbo.DashboardOperationLog (startedAtUtc DESC, operationType, status);
-    END;
-  `;
-
-  await pool.request().query(createScript);
-  await pool.request().query(createIndexScript);
+  return tableExists(pool, 'dbo.DashboardOperationLog');
 }
 
 async function logDashboardOperation(entry = {}) {
@@ -958,7 +764,9 @@ async function logDashboardOperation(entry = {}) {
     return 0;
   }
 
-  await ensureDashboardOperationLogSchema(pool);
+  if (!(await ensureDashboardOperationLogSchema(pool))) {
+    return 0;
+  }
 
   const request = pool.request();
   request.input('operationType', sql.NVarChar(64), entry.type || 'unknown');
@@ -996,7 +804,9 @@ async function listDashboardOperations(options = {}) {
     return [];
   }
 
-  await ensureDashboardOperationLogSchema(pool);
+  if (!(await ensureDashboardOperationLogSchema(pool))) {
+    return [];
+  }
 
   const limit = Math.max(5, Math.min(Number(options.limit || 25), 100));
   const request = pool.request();
@@ -1054,18 +864,7 @@ async function listDashboardOperations(options = {}) {
 }
 
 async function ensureDashboardSettingSchema(pool) {
-  const createScript = `
-    IF OBJECT_ID('dbo.DashboardSetting', 'U') IS NULL
-    BEGIN
-      CREATE TABLE dbo.DashboardSetting (
-        settingKey NVARCHAR(128) NOT NULL PRIMARY KEY,
-        settingValue NVARCHAR(MAX) NOT NULL,
-        updatedAtUtc DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
-      )
-    END;
-  `;
-
-  await pool.request().query(createScript);
+  return tableExists(pool, 'dbo.DashboardSetting');
 }
 
 async function getDashboardSettings(prefix = null) {
@@ -1183,88 +982,11 @@ async function upsertDashboardSettings(entries = {}) {
 }
 
 async function ensureLivePlacementSnapshotSchema(pool) {
-  const createScript = `
-    IF OBJECT_ID('dbo.LivePlacementSnapshot', 'U') IS NULL
-    BEGIN
-      CREATE TABLE dbo.LivePlacementSnapshot (
-        livePlacementSnapshotId BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-        capturedAtUtc DATETIME2 NOT NULL,
-        desiredCount INT NOT NULL,
-        region NVARCHAR(64) NOT NULL,
-        skuName NVARCHAR(128) NOT NULL,
-        livePlacementScore NVARCHAR(64) NOT NULL,
-        livePlacementAvailable BIT NULL,
-        livePlacementRestricted BIT NULL,
-        warningMessage NVARCHAR(512) NULL
-      )
-    END;
-  `;
-
-  const createIndexScript = `
-    IF NOT EXISTS (
-      SELECT 1
-      FROM sys.indexes
-      WHERE name = 'IX_LivePlacementSnapshot_DesiredCapturedRegionSku'
-        AND object_id = OBJECT_ID('dbo.LivePlacementSnapshot')
-    )
-    BEGIN
-      CREATE INDEX IX_LivePlacementSnapshot_DesiredCapturedRegionSku
-        ON dbo.LivePlacementSnapshot (desiredCount, capturedAtUtc DESC, region, skuName);
-    END;
-  `;
-
-  await pool.request().query(createScript);
-  await pool.request().query(createIndexScript);
+  return tableExists(pool, 'dbo.LivePlacementSnapshot');
 }
 
 async function ensurePaaSAvailabilitySnapshotSchema(pool) {
-  const createScript = `
-    IF OBJECT_ID('dbo.PaaSAvailabilitySnapshot', 'U') IS NULL
-    BEGIN
-      CREATE TABLE dbo.PaaSAvailabilitySnapshot (
-        paasAvailabilitySnapshotId BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-        runId UNIQUEIDENTIFIER NOT NULL,
-        capturedAtUtc DATETIME2 NOT NULL,
-        requestedService NVARCHAR(64) NOT NULL,
-        requestedRegionPreset NVARCHAR(64) NULL,
-        requestedRegionsJson NVARCHAR(MAX) NULL,
-        metadataJson NVARCHAR(MAX) NULL,
-        category NVARCHAR(64) NOT NULL,
-        service NVARCHAR(64) NOT NULL,
-        region NVARCHAR(64) NOT NULL,
-        resourceType NVARCHAR(64) NULL,
-        name NVARCHAR(256) NOT NULL,
-        displayName NVARCHAR(256) NULL,
-        edition NVARCHAR(128) NULL,
-        tier NVARCHAR(256) NULL,
-        family NVARCHAR(128) NULL,
-        status NVARCHAR(64) NULL,
-        available BIT NULL,
-        zoneRedundant BIT NULL,
-        quotaCurrent INT NULL,
-        quotaLimit INT NULL,
-        metricPrimary NVARCHAR(256) NULL,
-        metricSecondary NVARCHAR(256) NULL,
-        detailsJson NVARCHAR(MAX) NULL
-      );
-    END;
-  `;
-
-  const createIndexScript = `
-    IF NOT EXISTS (
-      SELECT 1
-      FROM sys.indexes
-      WHERE name = 'IX_PaaSAvailabilitySnapshot_ServiceCaptured'
-        AND object_id = OBJECT_ID('dbo.PaaSAvailabilitySnapshot')
-    )
-    BEGIN
-      CREATE INDEX IX_PaaSAvailabilitySnapshot_ServiceCaptured
-        ON dbo.PaaSAvailabilitySnapshot (requestedService, capturedAtUtc DESC, service, region);
-    END;
-  `;
-
-  await pool.request().query(createScript);
-  await pool.request().query(createIndexScript);
+  return tableExists(pool, 'dbo.PaaSAvailabilitySnapshot');
 }
 
 async function saveLivePlacementSnapshots(rows = []) {
@@ -1277,7 +999,9 @@ async function saveLivePlacementSnapshots(rows = []) {
     return 0;
   }
 
-  await ensureLivePlacementSnapshotSchema(pool);
+  if (!(await ensureLivePlacementSnapshotSchema(pool))) {
+    return 0;
+  }
 
   const transaction = new sql.Transaction(pool);
   await transaction.begin();
@@ -1322,7 +1046,9 @@ async function savePaaSAvailabilitySnapshots(rows = [], options = {}) {
     return { runId: null, rowCount: 0 };
   }
 
-  await ensurePaaSAvailabilitySnapshotSchema(pool);
+  if (!(await ensurePaaSAvailabilitySnapshotSchema(pool))) {
+    return { runId: null, rowCount: 0 };
+  }
 
   const effectiveRunId = options.runId || randomUUID();
   const requestedService = String(options.requestedService || 'All').trim() || 'All';
@@ -1383,7 +1109,9 @@ async function getLatestPaaSAvailabilitySnapshots(options = {}) {
     return { rows: [] };
   }
 
-  await ensurePaaSAvailabilitySnapshotSchema(pool);
+  if (!(await ensurePaaSAvailabilitySnapshotSchema(pool))) {
+    return { rows: [] };
+  }
 
   const requestedService = String(options.requestedService || '').trim();
   const normalizedMaxAge = Math.max(1, Math.min(Number(options.maxAgeHours || 168), 24 * 365));
@@ -1502,7 +1230,9 @@ async function getLatestLivePlacementSnapshots(desiredCount = 1, maxAgeHours = 1
     return [];
   }
 
-  await ensureLivePlacementSnapshotSchema(pool);
+  if (!(await ensureLivePlacementSnapshotSchema(pool))) {
+    return [];
+  }
 
   const normalizedDesiredCount = Math.max(1, Math.min(Number(desiredCount || 1), 1000));
   const normalizedMaxAge = Math.max(1, Math.min(Number(maxAgeHours || 168), 24 * 365));
@@ -1554,23 +1284,7 @@ async function getLatestLivePlacementSnapshots(desiredCount = 1, maxAgeHours = 1
 }
 
 async function ensureVmSkuCatalogSchema(pool) {
-  await pool.request().query(`
-    IF OBJECT_ID('dbo.VmSkuCatalog', 'U') IS NULL
-    BEGIN
-      CREATE TABLE dbo.VmSkuCatalog (
-        skuFamily NVARCHAR(128) NOT NULL,
-        skuName NVARCHAR(128) NOT NULL,
-        vCpu INT NULL,
-        memoryGB DECIMAL(10,2) NULL,
-        firstSeenUtc DATETIME2 NOT NULL CONSTRAINT DF_VmSkuCatalog_FirstSeenUtc DEFAULT SYSUTCDATETIME(),
-        lastSeenUtc DATETIME2 NOT NULL CONSTRAINT DF_VmSkuCatalog_LastSeenUtc DEFAULT SYSUTCDATETIME(),
-        CONSTRAINT PK_VmSkuCatalog PRIMARY KEY (skuFamily, skuName)
-      );
-    END;
-
-    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_VmSkuCatalog_Family' AND object_id = OBJECT_ID('dbo.VmSkuCatalog'))
-      CREATE NONCLUSTERED INDEX IX_VmSkuCatalog_Family ON dbo.VmSkuCatalog(skuFamily, skuName);
-  `);
+  return tableExists(pool, 'dbo.VmSkuCatalog');
 }
 
 async function upsertVmSkuCatalogRows(rows) {
@@ -1579,7 +1293,9 @@ async function upsertVmSkuCatalogRows(rows) {
     return { upserted: 0 };
   }
 
-  await ensureVmSkuCatalogSchema(pool);
+  if (!(await ensureVmSkuCatalogSchema(pool))) {
+    return { upserted: 0 };
+  }
 
   // Deduplicate by (family, name) within the batch.
   const dedup = new Map();
@@ -1639,7 +1355,9 @@ async function getVmSkuCatalogFamilies() {
   if (!pool) {
     return null;
   }
-  await ensureVmSkuCatalogSchema(pool);
+  if (!(await ensureVmSkuCatalogSchema(pool))) {
+    return null;
+  }
   const result = await pool.request().query(`
     SELECT skuFamily, skuName, vCpu, memoryGB
     FROM dbo.VmSkuCatalog
@@ -1649,304 +1367,35 @@ async function getVmSkuCatalogFamilies() {
 }
 
 async function ensurePhase3SchemaForPool(pool) {
-  const alterScript = `
-    IF COL_LENGTH('dbo.CapacitySnapshot', 'subscriptionKey') IS NULL
-      EXEC('ALTER TABLE dbo.CapacitySnapshot ADD subscriptionKey NVARCHAR(64) NULL');
+  const requiredTables = [
+    'dbo.CapacitySnapshot',
+    'dbo.Subscriptions',
+    'dbo.CapacityScoreSnapshot',
+    'dbo.LivePlacementSnapshot',
+    'dbo.PaaSAvailabilitySnapshot',
+    'dbo.DashboardErrorLog',
+    'dbo.DashboardOperationLog',
+    'dbo.DashboardSetting',
+    'dbo.VmSkuCatalog',
+    'dbo.AIModelAvailability'
+  ];
+  const missingTables = [];
 
-    IF COL_LENGTH('dbo.CapacitySnapshot', 'subscriptionId') IS NULL
-      EXEC('ALTER TABLE dbo.CapacitySnapshot ADD subscriptionId NVARCHAR(64) NULL');
+  for (const tableName of requiredTables) {
+    if (!(await tableExists(pool, tableName))) {
+      missingTables.push(tableName);
+    }
+  }
 
-    IF COL_LENGTH('dbo.CapacitySnapshot', 'subscriptionName') IS NULL
-      EXEC('ALTER TABLE dbo.CapacitySnapshot ADD subscriptionName NVARCHAR(256) NULL');
+  if (missingTables.length > 0) {
+    throw new Error(`Database schema is not fully provisioned via DACPAC. Missing objects: ${missingTables.join(', ')}`);
+  }
 
-    IF COL_LENGTH('dbo.CapacitySnapshot', 'sourceType') IS NULL
-      EXEC('ALTER TABLE dbo.CapacitySnapshot ADD sourceType NVARCHAR(50) NOT NULL CONSTRAINT DF_CapacitySnapshot_SourceType DEFAULT ''live-azure-ingest''');
-
-    IF COL_LENGTH('dbo.CapacitySnapshot', 'vCpu') IS NULL
-      EXEC('ALTER TABLE dbo.CapacitySnapshot ADD vCpu INT NULL');
-
-    IF COL_LENGTH('dbo.CapacitySnapshot', 'memoryGB') IS NULL
-      EXEC('ALTER TABLE dbo.CapacitySnapshot ADD memoryGB DECIMAL(10,2) NULL');
-
-    IF COL_LENGTH('dbo.CapacitySnapshot', 'zonesCsv') IS NULL
-      EXEC('ALTER TABLE dbo.CapacitySnapshot ADD zonesCsv NVARCHAR(256) NULL');
-  `;
-
-  const viewScript = `
-    CREATE OR ALTER VIEW dbo.CapacityLatest AS
-    WITH Ranked AS (
-      SELECT
-        capturedAtUtc,
-        sourceType,
-        subscriptionKey,
-        subscriptionId,
-        subscriptionName,
-        region,
-        skuName,
-        skuFamily,
-        vCpu,
-        memoryGB,
-        zonesCsv,
-        availabilityState,
-        quotaCurrent,
-        quotaLimit,
-        monthlyCostEstimate,
-        ROW_NUMBER() OVER (
-          PARTITION BY ISNULL(subscriptionKey, 'legacy-data'), ISNULL(sourceType, 'live-azure-ingest'), region, skuName
-          ORDER BY capturedAtUtc DESC
-        ) AS rn
-      FROM dbo.CapacitySnapshot
-    )
-    SELECT
-      capturedAtUtc,
-      sourceType,
-      subscriptionKey,
-      subscriptionId,
-      subscriptionName,
-      region,
-      skuName,
-      skuFamily,
-      vCpu,
-      memoryGB,
-      zonesCsv,
-      availabilityState,
-      quotaCurrent,
-      quotaLimit,
-      monthlyCostEstimate
-    FROM Ranked
-    WHERE rn = 1;
-  `;
-
-  const updateScript = `
-    UPDATE dbo.CapacitySnapshot
-    SET
-      subscriptionKey = ISNULL(subscriptionKey, 'legacy-data'),
-      subscriptionId = ISNULL(subscriptionId, 'legacy-data'),
-      subscriptionName = ISNULL(subscriptionName, 'Legacy data')
-    WHERE subscriptionKey IS NULL OR subscriptionId IS NULL OR subscriptionName IS NULL;
-  `;
-
-  const aiSchemaScript = `
-    IF OBJECT_ID('dbo.DashboardSetting', 'U') IS NULL
-    BEGIN
-      CREATE TABLE dbo.DashboardSetting (
-        settingKey NVARCHAR(128) NOT NULL PRIMARY KEY,
-        settingValue NVARCHAR(MAX) NOT NULL,
-        updatedAtUtc DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
-      );
-    END;
-
-    IF OBJECT_ID('dbo.AIModelAvailability', 'U') IS NULL
-    BEGIN
-      CREATE TABLE dbo.AIModelAvailability (
-        availabilityId BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-        capturedAtUtc DATETIME2 NOT NULL,
-        subscriptionId NVARCHAR(64) NOT NULL,
-        region NVARCHAR(64) NOT NULL,
-        provider NVARCHAR(128) NOT NULL CONSTRAINT DF_AIModelAvailability_Provider DEFAULT ('Unknown'),
-        modelName NVARCHAR(128) NOT NULL,
-        modelVersion NVARCHAR(64) NULL,
-        deploymentTypes NVARCHAR(512) NULL,
-        finetuneCapable BIT NOT NULL CONSTRAINT DF_AIModelAvailability_FinetuneCapable DEFAULT ((0)),
-        deprecationDate DATETIME2 NULL,
-        skuName NVARCHAR(128) NULL,
-        modelFormat NVARCHAR(64) NULL,
-        isDefault BIT NOT NULL CONSTRAINT DF_AIModelAvailability_IsDefault DEFAULT ((0)),
-        capabilities NVARCHAR(MAX) NULL
-      );
-    END;
-
-    IF COL_LENGTH('dbo.AIModelAvailability', 'provider') IS NULL
-    BEGIN
-      ALTER TABLE dbo.AIModelAvailability ADD provider NVARCHAR(128) NULL;
-    END;
-
-    IF NOT EXISTS (
-      SELECT 1
-      FROM sys.indexes
-      WHERE name = 'IX_AIModelAvailability_Region_Model'
-        AND object_id = OBJECT_ID('dbo.AIModelAvailability')
-    )
-    BEGIN
-      CREATE NONCLUSTERED INDEX IX_AIModelAvailability_Region_Model
-        ON dbo.AIModelAvailability(region, modelName, capturedAtUtc DESC);
-    END;
-
-    IF NOT EXISTS (
-      SELECT 1
-      FROM sys.indexes
-      WHERE name = 'IX_AIModelAvailability_CapturedAt'
-        AND object_id = OBJECT_ID('dbo.AIModelAvailability')
-    )
-    BEGIN
-      CREATE NONCLUSTERED INDEX IX_AIModelAvailability_CapturedAt
-        ON dbo.AIModelAvailability(capturedAtUtc DESC);
-    END;
-
-    IF NOT EXISTS (SELECT 1 FROM dbo.DashboardSetting WHERE settingKey = 'schedule.aiModelCatalog.intervalMinutes')
-    BEGIN
-      INSERT INTO dbo.DashboardSetting (settingKey, settingValue, updatedAtUtc)
-      VALUES ('schedule.aiModelCatalog.intervalMinutes', '1440', SYSUTCDATETIME());
-    END;
-
-    IF NOT EXISTS (SELECT 1 FROM dbo.DashboardSetting WHERE settingKey = 'ingest.openai.enabled')
-    BEGIN
-      INSERT INTO dbo.DashboardSetting (settingKey, settingValue, updatedAtUtc)
-      VALUES ('ingest.openai.enabled', 'false', SYSUTCDATETIME());
-    END;
-
-    IF NOT EXISTS (SELECT 1 FROM dbo.DashboardSetting WHERE settingKey = 'ingest.ai.enabled')
-    BEGIN
-      INSERT INTO dbo.DashboardSetting (settingKey, settingValue, updatedAtUtc)
-      VALUES (
-        'ingest.ai.enabled',
-        COALESCE((SELECT settingValue FROM dbo.DashboardSetting WHERE settingKey = 'ingest.openai.enabled'), 'false'),
-        SYSUTCDATETIME()
-      );
-    END;
-
-    IF NOT EXISTS (SELECT 1 FROM dbo.DashboardSetting WHERE settingKey = 'ingest.ai.providerQuota.enabled')
-    BEGIN
-      INSERT INTO dbo.DashboardSetting (settingKey, settingValue, updatedAtUtc)
-      VALUES ('ingest.ai.providerQuota.enabled', 'false', SYSUTCDATETIME());
-    END;
-
-    IF NOT EXISTS (SELECT 1 FROM dbo.DashboardSetting WHERE settingKey = 'ingest.openai.modelCatalog.enabled')
-    BEGIN
-      INSERT INTO dbo.DashboardSetting (settingKey, settingValue, updatedAtUtc)
-      VALUES ('ingest.openai.modelCatalog.enabled', 'true', SYSUTCDATETIME());
-    END;
-
-    IF NOT EXISTS (SELECT 1 FROM dbo.DashboardSetting WHERE settingKey = 'ingest.ai.modelCatalog.enabled')
-    BEGIN
-      INSERT INTO dbo.DashboardSetting (settingKey, settingValue, updatedAtUtc)
-      VALUES (
-        'ingest.ai.modelCatalog.enabled',
-        COALESCE((SELECT settingValue FROM dbo.DashboardSetting WHERE settingKey = 'ingest.openai.modelCatalog.enabled'), 'true'),
-        SYSUTCDATETIME()
-      );
-    END;
-  `;
-
-  const aiViewScript = `
-    CREATE OR ALTER VIEW dbo.AIModelAvailabilityLatest AS
-    WITH Ranked AS (
-      SELECT
-        capturedAtUtc,
-        subscriptionId,
-        region,
-        provider,
-        modelName,
-        modelVersion,
-        deploymentTypes,
-        finetuneCapable,
-        deprecationDate,
-        skuName,
-        modelFormat,
-        isDefault,
-        capabilities,
-        ROW_NUMBER() OVER (
-          PARTITION BY region, provider, modelName, modelVersion
-          ORDER BY capturedAtUtc DESC
-        ) AS rn
-      FROM dbo.AIModelAvailability
-    )
-    SELECT
-      capturedAtUtc,
-      subscriptionId,
-      region,
-      provider,
-      modelName,
-      modelVersion,
-      deploymentTypes,
-      finetuneCapable,
-      deprecationDate,
-      skuName,
-      modelFormat,
-      isDefault,
-      capabilities
-    FROM Ranked
-    WHERE rn = 1;
-  `;
-
-  const aiProviderMigrationScript = `
-    UPDATE dbo.AIModelAvailability
-    SET provider = CASE
-      WHEN NULLIF(LTRIM(RTRIM(modelFormat)), '') IS NULL THEN 'OpenAI'
-      WHEN LOWER(LTRIM(RTRIM(modelFormat))) IN ('openai', 'azureopenai') THEN 'OpenAI'
-      ELSE LTRIM(RTRIM(modelFormat))
-    END
-    WHERE provider IS NULL OR LTRIM(RTRIM(provider)) = '';
-
-    IF EXISTS (
-      SELECT 1
-      FROM sys.columns
-      WHERE object_id = OBJECT_ID('dbo.AIModelAvailability')
-        AND name = 'provider'
-        AND is_nullable = 1
-    )
-    BEGIN
-      -- Drop objects that depend on the provider column before altering it
-      IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_AIModelAvailability_Provider_Region_Model' AND object_id = OBJECT_ID('dbo.AIModelAvailability'))
-        DROP INDEX IX_AIModelAvailability_Provider_Region_Model ON dbo.AIModelAvailability;
-
-      DECLARE @providerDefaultConstraintName SYSNAME;
-      SELECT @providerDefaultConstraintName = sys.default_constraints.name
-      FROM sys.default_constraints
-      INNER JOIN sys.columns
-        ON sys.columns.object_id = sys.default_constraints.parent_object_id
-       AND sys.columns.column_id = sys.default_constraints.parent_column_id
-      WHERE sys.default_constraints.parent_object_id = OBJECT_ID('dbo.AIModelAvailability')
-        AND sys.columns.name = 'provider';
-
-      IF @providerDefaultConstraintName IS NOT NULL
-      BEGIN
-        DECLARE @dropProviderDefaultSql NVARCHAR(4000) =
-          N'ALTER TABLE dbo.AIModelAvailability DROP CONSTRAINT ' + QUOTENAME(@providerDefaultConstraintName) + N';';
-        EXEC sp_executesql @dropProviderDefaultSql;
-      END
-
-      ALTER TABLE dbo.AIModelAvailability ALTER COLUMN provider NVARCHAR(128) NOT NULL;
-
-      ALTER TABLE dbo.AIModelAvailability
-        ADD CONSTRAINT DF_AIModelAvailability_Provider DEFAULT ('Unknown') FOR provider;
-
-      CREATE NONCLUSTERED INDEX IX_AIModelAvailability_Provider_Region_Model
-        ON dbo.AIModelAvailability(provider, region, modelName, modelVersion, capturedAtUtc DESC);
-    END
-    ELSE
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1
-        FROM sys.default_constraints
-        INNER JOIN sys.columns
-          ON sys.columns.object_id = sys.default_constraints.parent_object_id
-         AND sys.columns.column_id = sys.default_constraints.parent_column_id
-        WHERE sys.default_constraints.parent_object_id = OBJECT_ID('dbo.AIModelAvailability')
-          AND sys.columns.name = 'provider'
-      )
-        ALTER TABLE dbo.AIModelAvailability ADD CONSTRAINT DF_AIModelAvailability_Provider DEFAULT ('Unknown') FOR provider;
-
-      IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_AIModelAvailability_Provider_Region_Model' AND object_id = OBJECT_ID('dbo.AIModelAvailability'))
-        CREATE NONCLUSTERED INDEX IX_AIModelAvailability_Provider_Region_Model
-          ON dbo.AIModelAvailability(provider, region, modelName, modelVersion, capturedAtUtc DESC);
-    END;
-  `;
-
-  await pool.request().query(alterScript);
-  await pool.request().query(updateScript);
-  await ensureSubscriptionsTableSchema(pool);
-  await ensureCapacityScoreSnapshotSchema(pool);
-  await ensureLivePlacementSnapshotSchema(pool);
-  await ensurePaaSAvailabilitySnapshotSchema(pool);
-  await ensureDashboardErrorLogSchema(pool);
-  await ensureDashboardOperationLogSchema(pool);
-  await ensureVmSkuCatalogSchema(pool);
-  await pool.request().query(viewScript);
-  await pool.request().query(aiSchemaScript);
-  await pool.request().query(aiProviderMigrationScript);
-  await pool.request().query(aiViewScript);
-  return { ok: true };
+  return {
+    ok: true,
+    schemaManagedBy: 'dacpac',
+    missingTables
+  };
 }
 
 async function ensurePhase3Schema() {
