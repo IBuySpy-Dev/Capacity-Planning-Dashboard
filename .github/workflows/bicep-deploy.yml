@@ -61,6 +61,14 @@ jobs:
           az bicep build --file infra/bicep/main.bicep
           echo "✓ Bicep lint passed"
 
+      - name: Validate Entra parameters
+        if: ${{ secrets.ENTRA_TENANT_ID == '' || secrets.ENTRA_CLIENT_ID == '' || secrets.ENTRA_CLIENT_SECRET == '' }}
+        run: |
+          echo "::error::AUTH_ENABLED is true but one or more ENTRA_ secrets are not set."
+          echo "::error::Deploying without these values will WIPE existing Entra app settings."
+          echo "::error::Set ENTRA_TENANT_ID, ENTRA_CLIENT_ID, and ENTRA_CLIENT_SECRET as GitHub secrets."
+          exit 1
+
       - name: Deploy Bicep
         run: |
           az deployment group create \
