@@ -42,6 +42,8 @@ dist/
 build/
 out/
 coverage/
+playwright-report/
+test-results/
 *.zip
 
 # Node modules

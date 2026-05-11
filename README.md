@@ -695,6 +695,20 @@ Notes:
 
 - `deploy-web-app.ps1` now runs `npm test` before packaging and deployment. Use `-SkipTests` only when you intentionally want to bypass the local test gate.
 - The current `npm test` suite is read-only and logic-focused. It does not require on-prem SQL connectivity or Azure API access.
+
+### E2E Tests
+
+```bash
+# Install Playwright browsers (first time)
+npx playwright install --with-deps chromium
+
+# Run E2E tests
+npm run e2e
+
+# Run with UI mode
+npx playwright test --ui
+```
+
 - The deployment script already stages the correct runtime files and publishes them to the App Service name you pass in.
 - The deployment package stages the repo's `react/` folder, root `server.js`, and root `web.config`, so a fresh pull plus redeploy publishes the current React experience and keeps `/api/*` routed to Express on Windows App Service.
 - Runtime packages should not include repo documentation or design artifacts such as `docs/`, `README.md`, or `api-contract.md`.
