@@ -43,3 +43,12 @@ param authEnabled = true
 // (set automatically by bootstrap-github-oidc.ps1 to the tenant root management group).
 // This sets the QUOTA_MANAGEMENT_GROUP_ID app setting and triggers post-deploy
 // Management Group Reader RBAC assignment to the web app managed identity.
+
+// REQUIRED: Populate with target Azure subscription IDs for subscription-scoped RBAC assignments.
+// These arrays drive the subscription() role assignment modules in main.bicep.
+// When empty ([]), no subscription-level roles are assigned and quota/billing/subscription
+// discovery features will be non-functional.
+// Example: ['xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx']
+param webReaderSubscriptionIds = []
+param webQuotaWriterSubscriptionIds = []
+param workerSubscriptionRbacSubscriptionIds = []
