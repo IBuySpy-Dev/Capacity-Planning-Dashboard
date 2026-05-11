@@ -29,12 +29,14 @@ param authEnabled = true
 // In GitHub Actions they are sourced from the "production" environment secrets.
 // When running manually: az deployment group create ... --parameters prod.bicepparam
 //   entraTenantId=<value> entraClientId=<value> entraClientSecret=<value>
+//   entraClientSecretKvUri=<key-vault-secret-uri>
 //   adminGroupId=<value> ingestApiKey=<value> sessionSecret=<value>
 //   quotaManagementGroupId=<tenantId>
 //
-// param entraTenantId      = '<AZURE_ENTRA_TENANT_ID>'      -- GitHub secret: ENTRA_TENANT_ID
-// param entraClientId      = '<AZURE_ENTRA_CLIENT_ID>'      -- GitHub secret: ENTRA_CLIENT_ID
-// param entraClientSecret  = '<AZURE_ENTRA_CLIENT_SECRET>'  -- GitHub secret: ENTRA_CLIENT_SECRET
+// param entraTenantId        = '<AZURE_ENTRA_TENANT_ID>'                       -- GitHub secret: ENTRA_TENANT_ID
+// param entraClientId        = '<AZURE_ENTRA_CLIENT_ID>'                       -- GitHub secret: ENTRA_CLIENT_ID
+// param entraClientSecret    = '<AZURE_ENTRA_CLIENT_SECRET>'                   -- GitHub secret: ENTRA_CLIENT_SECRET (fallback)
+// param entraClientSecretKvUri = '<https://<vault>.vault.azure.net/secrets/<secret-name>>' -- GitHub variable: ENTRA_CLIENT_SECRET_KEYVAULT_SECRET_URI (preferred)
 // param adminGroupId       = '<ADMIN_GROUP_OBJECT_ID>'      -- GitHub secret: ADMIN_GROUP_ID
 // param ingestApiKey       = '<INGEST_API_KEY>'             -- GitHub secret: INGEST_API_KEY
 // param sessionSecret      = '<SESSION_SECRET>'             -- GitHub secret: SESSION_SECRET

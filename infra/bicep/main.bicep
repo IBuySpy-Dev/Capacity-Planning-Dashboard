@@ -121,6 +121,10 @@ param entraClientId string = ''
 @description('Microsoft Entra application client secret used by the dashboard auth flow.')
 param entraClientSecret string = ''
 
+@secure()
+@description('Key Vault secret URI for the Entra client secret. When provided, takes precedence over entraClientSecret.')
+param entraClientSecretKvUri string = ''
+
 @description('Optional redirect URI for the dashboard auth callback. Defaults to the Azure Web App callback URL when omitted.')
 param authRedirectUri string = ''
 
@@ -175,7 +179,11 @@ var entraClientSecretSecretName = 'capdash-entra-client-secret'
 var ingestApiKeyKeyVaultReference = '@Microsoft.KeyVault(SecretUri=${effectiveKeyVaultUri}secrets/${ingestApiKeySecretName})'
 var sessionSecretKeyVaultReference = '@Microsoft.KeyVault(SecretUri=${effectiveKeyVaultUri}secrets/${sessionSecretSecretName})'
 var workerSharedSecretKeyVaultReference = empty(workerSharedSecret) ? '' : '@Microsoft.KeyVault(SecretUri=${effectiveKeyVaultUri}secrets/${workerSharedSecretSecretName})'
-var entraClientSecretKeyVaultReference = empty(entraClientSecret) ? '' : '@Microsoft.KeyVault(SecretUri=${effectiveKeyVaultUri}secrets/${entraClientSecretSecretName})'
+var entraClientSecretKeyVaultReference = !empty(entraClientSecretKvUri)
+  ? '@Microsoft.KeyVault(SecretUri=${entraClientSecretKvUri})'
+  : !empty(entraClientSecret)
+    ? '@Microsoft.KeyVault(SecretUri=${effectiveKeyVaultUri}secrets/${entraClientSecretSecretName})'
+    : ''
 
 resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
   name: vnetName

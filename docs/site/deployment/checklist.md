@@ -11,6 +11,7 @@ Use this checklist after a fresh Bicep deploy to verify the environment is fully
 - [ ] **`production` environment exists** — GitHub repo → Settings → Environments → `production`
 - [ ] **Bicep parameter file updated** — `infra/bicep/params/prod.bicepparam` contains your values
 - [ ] **Entra app registered** — `scripts/New-EntraApp.ps1` run; `ENTRA_CLIENT_ID` / `ENTRA_CLIENT_SECRET` obtained
+- [ ] **Entra client secret stored in Key Vault** — `capdash-entra-client-secret` exists and `ENTRA_CLIENT_SECRET_KEYVAULT_SECRET_URI` is set as a GitHub repository variable
 
 ---
 

@@ -80,6 +80,7 @@ jobs:
               entraTenantId="${{ secrets.ENTRA_TENANT_ID }}" \
               entraClientId="${{ secrets.ENTRA_CLIENT_ID }}" \
               entraClientSecret="${{ secrets.ENTRA_CLIENT_SECRET }}" \
+              entraClientSecretKvUri="${{ vars.ENTRA_CLIENT_SECRET_KEYVAULT_SECRET_URI }}" \
               adminGroupId="${{ secrets.ADMIN_GROUP_ID }}" \
               ingestApiKey="${{ secrets.INGEST_API_KEY }}" \
               sessionSecret="${{ secrets.SESSION_SECRET }}" \
