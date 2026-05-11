@@ -91,3 +91,4 @@ terraform.rc
 # DACPAC build output
 sql/dacpac/bin/
 sql/dacpac/obj/
+.worktrees/
