@@ -50,7 +50,19 @@ param authEnabled = true
 // These arrays drive the subscription() role assignment modules in main.bicep.
 // When empty ([]), no subscription-level roles are assigned and quota/billing/subscription
 // discovery features will be non-functional.
-// Example: ['xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx']
+// Format for every entry: Azure subscription GUIDs from Azure Portal → Subscriptions.
+
+// webReaderSubscriptionIds grants the web app read access on target subscriptions.
+// TODO: Populate with subscription GUIDs from Azure Portal → Subscriptions.
+// Example format: ['xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx']
 param webReaderSubscriptionIds = []
+
+// webQuotaWriterSubscriptionIds grants the web app quota write access on target subscriptions.
+// TODO: Populate with subscription GUIDs from Azure Portal → Subscriptions.
+// Example format: ['xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx']
 param webQuotaWriterSubscriptionIds = []
+
+// workerSubscriptionRbacSubscriptionIds grants the worker subscription-scoped RBAC on target subscriptions.
+// TODO: Populate with subscription GUIDs from Azure Portal → Subscriptions.
+// Example format: ['xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx']
 param workerSubscriptionRbacSubscriptionIds = []
