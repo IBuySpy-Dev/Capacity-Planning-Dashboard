@@ -3,6 +3,7 @@ const sql = require('mssql');
 const { normalizeFamilyName } = require('../lib/familyNormalization');
 
 let cachedPool;
+const SQL_POOL_RETRY_LIMIT = 1;
 
 function buildSqlConfig({ accessToken } = {}) {
   const server = process.env.SQL_SERVER || process.env.Sql__Server;
@@ -92,18 +93,48 @@ function normalizeSkuName(value) {
   return trimmed;
 }
 
-async function getSqlPool() {
+async function getSqlPool(retryCount = 0) {
   const config = buildSqlConfig();
   if (!config) {
     return null;
   }
 
   if (cachedPool) {
-    return cachedPool;
+    try {
+      await cachedPool.request().query('SELECT 1');
+      return cachedPool;
+    } catch (err) {
+      console.warn(`[sql] Cached SQL pool health check failed; resetting pool (attempt ${retryCount + 1}/${SQL_POOL_RETRY_LIMIT + 1}).`, err?.message || err);
+      await resetSqlPool();
+    }
   }
 
-  cachedPool = await sql.connect(config);
-  return cachedPool;
+  try {
+    cachedPool = await sql.connect(config);
+    await cachedPool.request().query('SELECT 1');
+    return cachedPool;
+  } catch (err) {
+    cachedPool = undefined;
+    if (retryCount < SQL_POOL_RETRY_LIMIT) {
+      console.warn(`[sql] Failed to establish SQL pool; retrying connection (attempt ${retryCount + 2}/${SQL_POOL_RETRY_LIMIT + 1}).`, err?.message || err);
+      return getSqlPool(retryCount + 1);
+    }
+    throw new Error(`Failed to establish SQL connection pool after ${SQL_POOL_RETRY_LIMIT + 1} attempts: ${err?.message || err}`);
+  }
+}
+
+async function resetSqlPool() {
+  if (!cachedPool) {
+    return;
+  }
+
+  const poolToClose = cachedPool;
+  cachedPool = undefined;
+  try {
+    await poolToClose.close();
+  } catch (err) {
+    console.warn('[sql] Failed to close cached pool during reset:', err?.message || err);
+  }
 }
 
 async function createSqlPoolWithAccessToken(accessToken) {
@@ -1929,6 +1960,7 @@ async function ensurePhase3Schema() {
 
 module.exports = {
   getSqlPool,
+  resetSqlPool,
   createSqlPoolWithAccessToken,
   insertCapacitySnapshots,
   upsertSubscriptions,
