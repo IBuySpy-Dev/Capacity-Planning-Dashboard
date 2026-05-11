@@ -79,7 +79,6 @@ const {
   createSqlPoolWithAccessToken,
   ensurePhase3Schema,
   ensurePhase3SchemaForPool,
-  ensureSubscriptionsTableSchema,
   getCapacityScoreSnapshotHistory,
   insertDashboardErrorLog,
   listDashboardErrorLogs,

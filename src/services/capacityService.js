@@ -1453,9 +1453,13 @@ async function getSkuFamilyCatalog({ forceRefresh = false } = {}) {
     return payload;
   }
 
-  // Make sure the catalog table exists even if startup warmup hasn't completed yet.
+  let hasVmSkuCatalog = false;
+  // Confirm whether the catalog table is available (schema is DACPAC-managed).
   try {
-    await ensureVmSkuCatalogSchema(pool);
+    const ensureResult = await ensureVmSkuCatalogSchema(pool);
+    hasVmSkuCatalog = typeof ensureResult === 'boolean'
+      ? ensureResult
+      : Boolean(ensureResult && ensureResult.ok !== false && ensureResult.available !== false);
   } catch (err) {
     console.warn('[getSkuFamilyCatalog] ensureVmSkuCatalogSchema failed, falling back to CapacitySnapshot only:', err?.message || err);
   }
@@ -1463,35 +1467,44 @@ async function getSkuFamilyCatalog({ forceRefresh = false } = {}) {
   // Trigger a non-blocking ARM seed if the catalog is currently empty. The first
   // request returns whatever is in CapacitySnapshot (typically just the
   // representative SKU per family); later requests pick up the seeded rows.
-  try {
-    const empty = await pool.request().query(`SELECT TOP 1 1 AS hit FROM dbo.VmSkuCatalog`);
-    if (!empty.recordset || empty.recordset.length === 0) {
-      const livePlacementService = require('./livePlacementService');
-      if (typeof livePlacementService.seedVmSkuCatalogIfEmpty === 'function') {
-        livePlacementService.seedVmSkuCatalogIfEmpty().then((result) => {
-          if (result?.seeded) {
-            console.log(`[VmSkuCatalog] Seeded ${result.count} rows from ARM (region=${result.region}).`);
-          }
-        }).catch((err) => {
-          console.warn('[VmSkuCatalog] background seed failed:', err?.message || err);
-        });
+  if (hasVmSkuCatalog) {
+    try {
+      const empty = await pool.request().query(`SELECT TOP 1 1 AS hit FROM dbo.VmSkuCatalog`);
+      if (!empty.recordset || empty.recordset.length === 0) {
+        const livePlacementService = require('./livePlacementService');
+        if (typeof livePlacementService.seedVmSkuCatalogIfEmpty === 'function') {
+          livePlacementService.seedVmSkuCatalogIfEmpty().then((result) => {
+            if (result?.seeded) {
+              console.log(`[VmSkuCatalog] Seeded ${result.count} rows from ARM (region=${result.region}).`);
+            }
+          }).catch((err) => {
+            console.warn('[VmSkuCatalog] background seed failed:', err?.message || err);
+          });
+        }
       }
+    } catch (err) {
+      // Table may not exist yet — already handled above; ignore here.
     }
-  } catch (err) {
-    // Table may not exist yet — already handled above; ignore here.
   }
 
-  const result = await pool.request().query(`
-    SELECT skuFamily, skuName
-    FROM dbo.VmSkuCatalog
-    WHERE skuFamily IS NOT NULL AND LEN(skuFamily) > 0
-      AND skuName IS NOT NULL AND LEN(skuName) > 0
-    UNION
-    SELECT DISTINCT skuFamily, skuName
-    FROM dbo.CapacitySnapshot
-    WHERE skuFamily IS NOT NULL AND LEN(skuFamily) > 0
-      AND skuName IS NOT NULL AND LEN(skuName) > 0
-  `);
+  const result = await pool.request().query(hasVmSkuCatalog
+    ? `
+      SELECT skuFamily, skuName
+      FROM dbo.VmSkuCatalog
+      WHERE skuFamily IS NOT NULL AND LEN(skuFamily) > 0
+        AND skuName IS NOT NULL AND LEN(skuName) > 0
+      UNION
+      SELECT DISTINCT skuFamily, skuName
+      FROM dbo.CapacitySnapshot
+      WHERE skuFamily IS NOT NULL AND LEN(skuFamily) > 0
+        AND skuName IS NOT NULL AND LEN(skuName) > 0
+    `
+    : `
+      SELECT DISTINCT skuFamily, skuName
+      FROM dbo.CapacitySnapshot
+      WHERE skuFamily IS NOT NULL AND LEN(skuFamily) > 0
+        AND skuName IS NOT NULL AND LEN(skuName) > 0
+    `);
 
   const families = {};
   for (const row of result.recordset) {
