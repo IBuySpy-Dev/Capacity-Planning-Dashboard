@@ -168,10 +168,13 @@ Write-Info "GitHub Repo: $GitHubRepository"
 
 Write-Section "Creating service principal..."
 try {
+    # Subscription-scoped Contributor is required because Bicep deployment includes
+    # subscription() RBAC modules (Reader, GroupQuota Request Operator, worker roles).
+    # Resource-group scope is insufficient for those role assignment deployments.
     $sp = az ad sp create-for-rbac `
         --name $ServicePrincipalName `
         --role Contributor `
-        --scopes "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName" `
+        --scopes "/subscriptions/$SubscriptionId" `
         --query "{clientId: appId, subscriptionId: subscriptionId, tenantId: tenantId}" `
         -o json | ConvertFrom-Json
     
@@ -509,7 +512,7 @@ Write-Section "Summary"
 Write-Host ""
 Write-Host "✓ Service Principal Created" -ForegroundColor $COLORS.Success
 Write-Host "  ID: $ClientId"
-Write-Host "  Roles: Contributor (RG scope), Contributor + User Access Administrator (subscription scope)"
+Write-Host "  Roles: Contributor + User Access Administrator (subscription scope)"
 Write-Host ""
 Write-Host "✓ GitHub Federated Credentials Configured" -ForegroundColor $COLORS.Success
 Write-Host "  - Main branch deployments"
