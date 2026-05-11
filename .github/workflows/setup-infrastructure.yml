@@ -23,6 +23,8 @@ jobs:
 
     steps:
       - name: Login to Azure (OIDC)
+        # OIDC login — no long-lived credential stored anywhere.
+        # Legacy credentials secret must NOT be used (security policy).
         uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
