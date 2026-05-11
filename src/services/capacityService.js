@@ -475,9 +475,21 @@ function buildLatestSnapshotBatchCte() {
 const SUBSCRIPTIONS_BACKEND_NOT_READY_CODE = 'SUBSCRIPTIONS_BACKEND_NOT_READY';
 const RETRYABLE_SQL_ERROR_CODES = new Set(['ECONNCLOSED', 'ENOTOPEN', 'ESOCKET', 'ETIMEOUT']);
 
-function createSubscriptionsBackendNotReadyError() {
+async function getSqlPoolOrNull(scope, fallbackTarget = 'mock data') {
+  try {
+    return await getSqlPool();
+  } catch (err) {
+    console.warn(`[${scope}] SQL pool unavailable, falling back to ${fallbackTarget}:`, err?.message || err);
+    return null;
+  }
+}
+
+function createSubscriptionsBackendNotReadyError(cause = null) {
   const err = new Error('Subscriptions are temporarily unavailable because required SQL schema objects are not ready. Run database bootstrap or /internal/db/ensure-phase3-schema, then retry.');
   err.code = SUBSCRIPTIONS_BACKEND_NOT_READY_CODE;
+  if (cause) {
+    err.cause = cause;
+  }
   return err;
 }
 
@@ -632,10 +644,10 @@ async function getCapacityRows(filters) {
  */
 async function getCapacityRowsPaginated(filters) {
   const { pageSize, pageNumber, offset } = parsePaginationParams(filters);
-  const pool = await getSqlPool();
+  const pool = await getSqlPoolOrNull('capacityService:getCapacityRowsPaginated');
 
   if (!pool) {
-    const allRows = applyFilters(applyRegionPreset(mockRows.map(normalizeCapacityRow), filters.regionPreset), filters);
+    const allRows = getMockCapacityRows(filters);
     const total = allRows.length;
     const pagedRows = allRows.slice(offset, offset + pageSize);
     const facets = {
@@ -721,9 +733,9 @@ async function getCapacityRowsPaginated(filters) {
 }
 
 async function getSubscriptionsCore({ search, limit } = {}) {
-  const pool = await getSqlPool();
+  const pool = await getSqlPoolOrNull('capacityService:getSubscriptions', 'subscriptions backend');
   if (!pool) {
-    return [{ subscriptionId: 'legacy-data', subscriptionName: 'Legacy data' }];
+    throw createSubscriptionsBackendNotReadyError();
   }
 
   const tableRows = await getSubscriptionsFromTable({ search, limit });
@@ -789,7 +801,14 @@ async function getSubscriptions(filters = {}, attempt = 0) {
   try {
     return await getSubscriptionsCore(filters);
   } catch (err) {
+    if (err?.code === SUBSCRIPTIONS_BACKEND_NOT_READY_CODE) {
+      throw err;
+    }
+
     if (attempt >= 1 || !isRetryableSqlConnectionError(err)) {
+      if (isRetryableSqlConnectionError(err)) {
+        throw createSubscriptionsBackendNotReadyError(err);
+      }
       throw err;
     }
 
