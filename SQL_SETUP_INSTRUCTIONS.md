@@ -29,13 +29,13 @@ ALTER ROLE db_datareader ADD MEMBER [app-capdash-prod-prod01];
 -- Grant database writer role (for INSERT/UPDATE/DELETE queries)
 ALTER ROLE db_datawriter ADD MEMBER [app-capdash-prod-prod01];
 
--- Grant DDL admin role (required for schema initialization at startup)
+-- Grant DDL admin role (required for schema initialization DDL: CREATE TABLE, ALTER TABLE, CREATE INDEX)
 ALTER ROLE db_ddladmin ADD MEMBER [app-capdash-prod-prod01];
 `
 
 ### 3. Verify Success
-- All three commands should execute without errors
-- You should see: "(3 rows affected)"
+- All four commands should execute without errors
+- You should see: "(4 rows affected)"
 
 ### 4. Restart the App Service
 Run this command in PowerShell/terminal:
