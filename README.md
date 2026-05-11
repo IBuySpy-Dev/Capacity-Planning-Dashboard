@@ -9,7 +9,7 @@ This repository contains the initial platform scaffold for a native Azure capaci
 
 ## Local Development
 
-1. Copy `.env.sample` to `.env` and fill in values.
+1. Copy `.env.example` to `.env` and fill in values.
 2. Start a local SQL Server: `docker compose up -d` (requires [Docker Desktop](https://www.docker.com/products/docker-desktop/)).
 3. Run the app: `npm install && npm start`.
 

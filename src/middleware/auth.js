@@ -51,7 +51,7 @@ const OAUTH_STATE_MAX_PENDING = 5;
 // to the calling SPN.  The token's `roles` claim carries the granted roles.
 // Use requireRole('RoleName') to enforce a specific role on any route.
 //
-// Required env vars (all already present in .env.sample):
+// Required env vars (all already present in .env.example):
 //   ENTRA_TENANT_ID   – Azure AD tenant GUID
 //   ENTRA_CLIENT_ID   – This application's client/app ID
 // ---------------------------------------------------------------------------
