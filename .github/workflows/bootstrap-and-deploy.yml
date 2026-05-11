@@ -93,14 +93,21 @@ jobs:
     needs: setup-secrets
     runs-on: ubuntu-latest
     if: success()
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Azure Login
-        uses: azure/login@v3
+      - name: Azure Login (OIDC)
+        # OIDC login — no long-lived credential stored anywhere.
+        # Legacy credentials secret must NOT be used (security policy).
+        uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
