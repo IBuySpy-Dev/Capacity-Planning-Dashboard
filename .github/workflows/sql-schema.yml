@@ -46,7 +46,7 @@ jobs:
           echo "Built: $DACPAC"
 
       - name: Upload DACPAC artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: capdash-dacpac
           path: sql/dacpac/bin/Release/*.dacpac
